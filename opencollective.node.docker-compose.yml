@@ -1,0 +1,16 @@
+# A developer environment for TypeScript/Node.js, 
+services:
+  dev:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm
+    volumes:
+      - ../..:/workspace
+    ports:
+      - "3000:3000" # Frontend
+      - "3001:3001" # Images service
+      - "3002:3002" # PDF service
+      - "3003:3003" # REST service
+      - "3060:3060" # API
+    working_dir: /workspace
+    command: sleep infinity
+    networks:
+      - default

@@ -1,0 +1,122 @@
+name: Validate Workspace Configuration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validate-repositories-consistency:
+    name: Validate Repositories Consistency
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Extract repositories from init.sh
+      id: extract-repos
+      run: |
+        # Extract repository names from the repositories array in init.sh
+        # The array format is: "url" "name" pairs, we need the names (odd indices)
+        REPOS=$(grep -A 20 'declare -a repositories=(' init.sh | \
+                 grep -E '^\s*"[^"]*"\s*"[^"]*"' | \
+                 sed -E 's/.*"[^"]*"\s*"([^"]*)".*/\1/' | \
+                 sort)
+        
+        echo "repositories<<EOF" >> $GITHUB_OUTPUT
+        echo "$REPOS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "Found repositories:"
+        echo "$REPOS"
+        
+    - name: Extract folders from workspace file
+      id: extract-folders
+      run: |
+        # Extract folder paths from the workspace file and convert to just the folder names
+        FOLDERS=$(grep -E '^\s*"path":\s*"apps/[^"]*"' opencollective-workspace.code-workspace | \
+                  sed -E 's/.*"path":\s*"apps\/([^"]*)".*/\1/' | \
+                  sort)
+        
+        echo "folders<<EOF" >> $GITHUB_OUTPUT
+        echo "$FOLDERS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "Found folders:"
+        echo "$FOLDERS"
+        
+    - name: Compare repositories and folders
+      run: |
+        # Create temporary files for comparison
+        echo "${{ steps.extract-repos.outputs.repositories }}" > /tmp/repos.txt
+        echo "${{ steps.extract-folders.outputs.folders }}" > /tmp/folders.txt
+        
+        echo "=== Repositories from init.sh ==="
+        cat /tmp/repos.txt
+        
+        echo ""
+        echo "=== Folders from workspace ==="
+        cat /tmp/folders.txt
+        
+        echo ""
+        echo "=== Checking for missing repositories in workspace ==="
+        MISSING_IN_WORKSPACE=$(comm -23 /tmp/repos.txt /tmp/folders.txt)
+        if [ -n "$MISSING_IN_WORKSPACE" ]; then
+          echo "❌ Repositories missing from workspace:"
+          echo "$MISSING_IN_WORKSPACE"
+          exit 1
+        else
+          echo "✅ All repositories from init.sh are present in workspace"
+        fi
+        
+        echo ""
+        echo "=== Checking for extra folders in workspace ==="
+        EXTRA_IN_WORKSPACE=$(comm -13 /tmp/repos.txt /tmp/folders.txt)
+        if [ -n "$EXTRA_IN_WORKSPACE" ]; then
+          echo "⚠️  Extra folders in workspace (not in init.sh):"
+          echo "$EXTRA_IN_WORKSPACE"
+          echo "This might be intentional, but please verify."
+        else
+          echo "✅ No extra folders found in workspace"
+        fi
+        
+        echo ""
+        echo "=== Summary ==="
+        echo "✅ Repository consistency check passed!"
+
+  test-init-script:
+    name: Test Init Script
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test init.sh script
+      run: ./init.sh --shallow
+
+    - name: Verify apps directory structure
+      run: |
+        echo "=== Apps directory contents ==="
+        ls -la apps/
+        
+        echo ""
+        echo "=== Expected repositories ==="
+        # List the expected repository names from init.sh
+        grep -A 20 'declare -a repositories=(' init.sh | \
+          grep -E '^\s*"[^"]*"\s*"[^"]*"' | \
+          sed -E 's/.*"[^"]*"\s*"([^"]*)".*/\1/' | \
+          while read repo; do
+            if [ -d "apps/$repo" ]; then
+              echo "✅ apps/$repo exists"
+            else
+              echo "❌ apps/$repo missing"
+              exit 1
+            fi
+          done
+        
+        echo ""
+        echo "✅ All expected repositories were created!"

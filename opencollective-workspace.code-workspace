@@ -1,0 +1,91 @@
+{
+  "folders": [
+    {
+      "path": ".devcontainer"
+    },
+    {
+      "path": "apps/opencollective"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/frontend"
+    },
+    {
+      "path": "apps/pdf"
+    },
+    {
+      "path": "apps/taxes"
+    },
+    {
+      "path": "apps/images"
+    },
+    {
+      "path": "apps/rest"
+    },
+    {
+      "path": "apps/workers"
+    },
+    {
+      "path": "apps/tools"
+    },
+        {
+      "path": "apps/rss"
+    },
+    {
+      "path": "apps/watch"
+    },
+    {
+      "path": "apps/ml"
+    },
+    {
+      "path": "apps/contributors-svg"
+    },
+    {
+      "path": "apps/discover"
+    },
+    {
+      "path": "apps/documentation"
+    },
+    {
+      "path": "apps/eslint-config"
+    },
+    {
+      "path": "apps/graphql-docs"
+    },
+  ],
+  "editor.rulers": [110, 120],
+  "settings": {
+    "autoimport.filesToScan": "${workspaceRoot}/apps/opencollective-{api/server,frontend/src}/**/*.{js,jsx,ts,tsx}",
+    "[handlebars]": {
+      "editor.formatOnSave": false
+    },
+    "sqltools.connections": [
+      {
+        "askForPassword": false,
+        "database": "opencollective_dvl",
+        "dialect": "PostgreSQL",
+        "name": "[Dev] OC",
+        "port": 5432,
+        "server": "localhost",
+        "username": "opencollective"
+      }
+    ],
+    "cSpell.words": [
+      "Cloudinary",
+      "Filterbar",
+      "invitable",
+      "klippa",
+      "MAILGUN",
+      "notif",
+      "ofitech",
+      "Ofitech",
+      "opensource",
+      "postgis",
+      "unhosted",
+      "virtualcard",
+      "yubikey"
+    ]
+  }
+}

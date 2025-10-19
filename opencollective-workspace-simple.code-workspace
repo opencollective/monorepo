@@ -1,0 +1,55 @@
+{
+  "folders": [
+    {
+      "path": ".devcontainer"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/frontend"
+    }
+  ],
+  "editor.rulers": [110, 120],
+  "settings": {
+    "autoimport.filesToScan": "${workspaceRoot}/apps/opencollective-{api/server,frontend/src}/**/*.{js,jsx,ts,tsx}",
+    "[handlebars]": {
+      "editor.formatOnSave": false
+    },
+    "sqltools.connections": [
+      {
+        "askForPassword": false,
+        "database": "opencollective_dvl",
+        "dialect": "PostgreSQL",
+        "name": "[Dev] OC",
+        "port": 5432,
+        "server": "localhost",
+        "username": "opencollective"
+      }
+    ],
+    "cSpell.words": [
+      "Braintree",
+      "Cardless",
+      "Cloudinary",
+      "Filterbar",
+      "fundingicons",
+      "GITTER",
+      "invitable",
+      "klippa",
+      "MAILGUN",
+      "notif",
+      "ofitech",
+      "Ofitech",
+      "opensource",
+      "Positionals",
+      "postgis",
+      "unhosted",
+      "virtualcard",
+      "yubikey"
+    ],
+    "deepscan.enable": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  }
+}
