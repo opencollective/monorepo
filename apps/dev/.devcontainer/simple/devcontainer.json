@@ -3,11 +3,12 @@
 {
 	"name": "Open Collective",
 	"dockerComposeFile": [
-		"../api/docker-compose/database.yml",
+		"../../../api/docker-compose/database.yml",
 		// Uncomment the following lines if you need these services
-		// "../api/docker-compose/search.yml",
-		// "../api/docker-compose/mail.yml",
-		// "../api/docker-compose/uploads.yml",
+		// "../../../api/docker-compose/search.yml",
+		// "../../../api/docker-compose/mail.yml",
+		// "../../../api/docker-compose/uploads.yml",
+		// Dev environment terminal entrypoint
 		"../opencollective.node.docker-compose.yml"
 	],
 	"service": "dev",
@@ -20,13 +21,16 @@
 			"version": "16"
 		}
 	},
-
-	// Expose frontend, API, Postgres, and Mailpit ports to the host machine.
-	"forwardPorts": [3000,3060,5432,1080],
-
-	// Use 'workspaceFolder' to specify the working directory for your container.
-	"workspaceFolder": "/workspace"
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "yarn install",
+	"forwardPorts": [
+		3000, // Frontend
+		3060, // API
+		5432, // Postgres
+		1080 // Mailpit
+	],
+	"workspaceFolder": "/workspace",
+	"mounts": [
+		"source=../../../api,target=/workspace/apps/api,type=bind",
+		"source=../../../frontend,target=/workspace/apps/frontend,type=bind",
+		"source=../../../dev,target=/workspace/dev,type=bind"
+	],
 }

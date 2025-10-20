@@ -1,0 +1,39 @@
+{
+  "folders": [
+    {
+      "path": "./dev"
+    },
+    {
+      "path": "./api"
+    },
+    {
+      "path": "./frontend"
+    }
+  ],
+  "editor.rulers": [110, 120],
+  "settings": {
+    "[handlebars]": {
+      "editor.formatOnSave": false
+    },
+    "cSpell.words": [
+      "Braintree",
+      "Cardless",
+      "Cloudinary",
+      "Filterbar",
+      "fundingicons",
+      "GITTER",
+      "invitable",
+      "klippa",
+      "MAILGUN",
+      "notif",
+      "ofitech",
+      "Ofitech",
+      "opensource",
+      "Positionals",
+      "postgis",
+      "unhosted",
+      "virtualcard",
+      "yubikey"
+    ],
+  }
+}

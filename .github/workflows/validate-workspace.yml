@@ -37,7 +37,7 @@ jobs:
       id: extract-folders
       run: |
         # Extract folder paths from the workspace file and convert to just the folder names
-        FOLDERS=$(grep -E '^\s*"path":\s*"apps/[^"]*"' opencollective-workspace.code-workspace | \
+        FOLDERS=$(grep -E '^\s*"path":\s*"apps/[^"]*"' ./apps/opencollective-workspace.code-workspace | \
                   sed -E 's/.*"path":\s*"apps\/([^"]*)".*/\1/' | \
                   sort)
         

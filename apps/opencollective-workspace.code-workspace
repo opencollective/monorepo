@@ -1,58 +1,58 @@
 {
   "folders": [
     {
-      "path": ".devcontainer"
+      "path": "../apps/api"
     },
     {
-      "path": "apps/opencollective"
+      "path": "../apps/frontend"
     },
     {
-      "path": "apps/api"
+      "path": "../apps/pdf"
     },
     {
-      "path": "apps/frontend"
+      "path": "../apps/taxes"
     },
     {
-      "path": "apps/pdf"
+      "path": "../apps/images"
     },
     {
-      "path": "apps/taxes"
+      "path": "../apps/rest"
     },
     {
-      "path": "apps/images"
+      "path": "../apps/workers"
     },
     {
-      "path": "apps/rest"
-    },
-    {
-      "path": "apps/workers"
-    },
-    {
-      "path": "apps/tools"
+      "path": "../apps/tools"
     },
         {
-      "path": "apps/rss"
+      "path": "../apps/rss"
     },
     {
-      "path": "apps/watch"
+      "path": "../apps/watch"
     },
     {
-      "path": "apps/ml"
+      "path": "../apps/ml"
     },
     {
-      "path": "apps/contributors-svg"
+      "path": "../apps/contributors-svg"
     },
     {
-      "path": "apps/discover"
+      "path": "../apps/discover"
     },
     {
-      "path": "apps/documentation"
+      "path": "../apps/documentation"
     },
     {
-      "path": "apps/eslint-config"
+      "path": "../apps/eslint-config"
     },
     {
-      "path": "apps/graphql-docs"
+      "path": "../apps/graphql-docs"
+    },
+    {
+      "path": "../apps/opencollective"
+    },
+    {
+      "path": "."
     },
   ],
   "editor.rulers": [110, 120],

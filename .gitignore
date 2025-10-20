@@ -1,2 +1,4 @@
 apps/*
-!apps/.gitkeep
+!apps/dev
+!apps/*.code-workspace
+.vscode
