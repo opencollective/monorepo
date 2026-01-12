@@ -1,0 +1,68 @@
+{
+  "folders": [
+    {
+      "path": "opencollective-api",
+      "name": "API"
+    },
+    {
+      "path": "opencollective-frontend",
+      "name": "Frontend"
+    },
+    {
+      "path": "opencollective-pdf",
+      "name": "PDF"
+    },
+    {
+      "path": "opencollective-taxes",
+      "name": "Taxes"
+    },
+    {
+      "path": "opencollective-rest",
+      "name": "REST"
+    }
+  ],
+  "editor.rulers": [110, 120],
+  "settings": {
+    "autoimport.filesToScan": "${workspaceRoot}/opencollective-{api/server,frontend/src}/**/*.{js,jsx,ts,tsx}",
+    "[handlebars]": {
+      "editor.formatOnSave": false
+    },
+    "sqltools.connections": [
+      {
+        "askForPassword": false,
+        "database": "opencollective_dvl",
+        "dialect": "PostgreSQL",
+        "name": "[Dev] OC",
+        "port": 5432,
+        "server": "localhost",
+        "username": "opencollective"
+      }
+    ],
+    "cSpell.words": [
+      "Braintree",
+      "Cardless",
+      "Cloudinary",
+      "Filterbar",
+      "fundingicons",
+      "GITTER",
+      "invitable",
+      "klippa",
+      "MAILGUN",
+      "notif",
+      "ofitech",
+      "Ofitech",
+      "opensource",
+      "Positionals",
+      "postgis",
+      "unhosted",
+      "virtualcard",
+      "yubikey"
+    ],
+    "deepscan.enable": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

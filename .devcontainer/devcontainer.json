@@ -1,0 +1,69 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/typescript-node
+{
+  "name": "Open Collective",
+  "dockerComposeFile": [
+    "../opencollective.node.docker-compose.yml",
+    "../opencollective-api/docker-compose/db.yml",
+    // "../opencollective-api/docker-compose/search.yml",
+    "../opencollective-api/docker-compose/mail.yml",
+    "../opencollective-api/docker-compose/uploads.yml"
+  ],
+  "service": "dev",
+  "containerEnv": {
+    "PG_HOST": "postgres"
+  },
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/robbert229/devcontainer-features/postgresql-client:1": {
+      "version": "16"
+    }
+  },
+  // Extensions
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "prettier.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  },
+  // Expose frontend, API, Postgres, and Mailpit ports to the host machine.
+  "portsAttributes": {
+    "3000": {
+      "label": "Frontend",
+      "onAutoForward": "notify",
+      "requireLocalPort": true
+    },
+    "3060": {
+      "label": "API",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "5432": {
+      "label": "Postgres",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "1080": {
+      "label": "Mailpit",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "1025": {
+      "label": "SMTP",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    }
+  },
+
+  // Use 'workspaceFolder' to specify the working directory for your container.
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": {
+    "cypressDependencies": "sudo apt update && sudo apt install -y --no-install-recommends libgtk-3-0 libgbm-dev libnotify-dev libnss3 libxss1 libasound2 libxtst6 xauth xvfb",
+    "installFrontendDependencies": "cd opencollective-frontend && npm install",
+    "installAPIDependencies": "cd opencollective-api && npm install",
+    "globalNpmPackages": "npm install -g eslint prettier pm2"
+  }
+}

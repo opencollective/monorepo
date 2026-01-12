@@ -1,0 +1,39 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "always"
+  },
+  "eslint.validate": ["javascript", "typescript", "typescriptreact"],
+  "files.exclude": {
+    "*.code-workspace": true,
+    "**/dist/*": true,
+    "opencollective-images/": true,
+    "opencollective-rest/": true,
+    "opencollective-taxes/": true,
+    "opencollective-tools/": true,
+    "opencollective-watch/": true,
+    "test/": true,
+    ".git-backup/": true
+  },
+  "search.useIgnoreFiles": false,
+  "search.useParentIgnoreFiles": false,
+  "search.exclude": {
+    "**/.next": true,
+    "**/*.graphql": true,
+    "**/coverage": true,
+    "**/graphql.d.ts": true,
+    "**/graphql/types/v2/gql.d.ts": true,
+    "**/graphql/types/v2/gql.ts": true,
+    "**/graphql/types/v2/graphql.ts": true,
+    "**/graphql/types/v2/schema.ts": true,
+    "logs/": true,
+    "tsconfig.tsbuildinfo": true
+  }
+}
