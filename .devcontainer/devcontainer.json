@@ -11,7 +11,8 @@
   ],
   "service": "dev",
   "containerEnv": {
-    "PG_HOST": "postgres"
+    "PG_HOST": "postgres",
+    "MAILPIT_HOST": "mailpit"
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
@@ -48,11 +49,6 @@
     },
     "1080": {
       "label": "Mailpit",
-      "onAutoForward": "silent",
-      "requireLocalPort": true
-    },
-    "1025": {
-      "label": "SMTP",
       "onAutoForward": "silent",
       "requireLocalPort": true
     }
