@@ -1,7 +1,7 @@
-# A developer environment for TypeScript/Node.js, 
+# A developer environment for TypeScript/Node.js,
 services:
   dev:
-    image: mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm
+    image: mcr.microsoft.com/devcontainers/typescript-node:24
     volumes:
       - ./:/workspace
     working_dir: /workspace

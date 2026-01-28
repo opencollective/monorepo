@@ -7,6 +7,9 @@
   "[javascript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "always"
   },
@@ -34,6 +37,6 @@
     "**/graphql/types/v2/graphql.ts": true,
     "**/graphql/types/v2/schema.ts": true,
     "logs/": true,
-    "tsconfig.tsbuildinfo": true
+    "**/tsconfig.tsbuildinfo": true
   }
 }

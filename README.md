@@ -9,15 +9,15 @@ This workspace serves as:
 - **Shared IDE Configuration**: VS Code workspace settings and extensions
 - **Common Tools & Configs**: Shared configs, scripts, and development utilities
 
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
 - Git
-- Docker/Podman (for devcontainers)
-- If not using devcontainers: check individual project's README for specific setup instructions
+- Docker or Podman (for the recommended DevContainer setup)
+- Alternatively, check each project's README for manual setup instructions
 
-**Clone this workspace and initialize all projects**:
+### 1. Clone the Workspace
 
 ```bash
 git clone https://github.com/opencollective/opencollective-monorepo.git opencollective
@@ -25,45 +25,73 @@ cd opencollective
 ./scripts/init.sh
 ```
 
-This will clone all projects into the root directory.
+This clones all Open Collective projects into a single workspace.
 
-### Running the projects
+### 2. Open in VS Code with DevContainer (Recommended)
 
-#### Option 1: Using DevContainer (Recommended)
-
-##### With VS Code Dev Containers
-
-**Opening the projects in VS Code**:
+DevContainers give you a fully configured development environment with all dependencies ready to go.
 
 1. Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-2. Open one of the `.code-workspace` files in the. We recommend using `opencollective-workspace-simple.code-workspace` (a version with only the frontend and the API) in most cases.
-3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and select "Dev Containers: Reopen in Container"
+2. Open `opencollective-workspace-simple.code-workspace` (includes frontend + API)
+3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and select **"Dev Containers: Reopen in Container"**
 
-VS Code will start with the required services (postgres, mailpit, etc.) running and a shell setup with all the necessary tooling. You will still need to install dependencies and start individual projects.
+VS Code will start with PostgreSQL, Mailpit, and other services running automatically.
 
-**Starting the projects**:
+### 3. Start the Application
 
-- Use the `./scripts/run.sh` script.
-- Alternatively, you could start project simply by opening a terminal (in containereized VS code) and run `npm install` followed by `npm run dev`.
-
-You can then access the frontend at [http://localhost:3000](http://localhost:3000) and the API at [http://localhost:3060](http://localhost:3060).
-
-#### Option 2: Manual Setup
-
-Dependencies: you can use the `./scripts/start-dependencies.sh` script to start the dependencies.
-Projects: Just navigate to the project directories (you'll probably want to start with opencollective-api and opencollective-frontend) and follow the instructions in their respective README files.
-
-## Editing the monorepo
-
-By default, the `init.sh` script remove git once it's done, as it confuses vscode. To commit something to the monorepo:
+Run the start script to launch the frontend, API, and PDF services:
 
 ```bash
-$ ./scripts/restore-git.sh # Restore git
-$ # Do your changes and git operations here
-$ ./scripts/remove-git.sh # Remove git again
+./scripts/run.sh
 ```
 
-## Getting Help
+**Access the app:**
 
-- **Discord**: Join our [Discord community](https://discord.opencollective.com)
-- **Issues & Discussions**: [GitHub](https://github.com/opencollective/opencollective)
+- Frontend: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:3060](http://localhost:3060)
+
+**Start specific services:**
+
+```bash
+./scripts/run.sh frontend           # Frontend only
+./scripts/run.sh frontend api       # Frontend and API
+./scripts/run.sh frontend:staging   # Frontend connected to staging
+```
+
+---
+
+## Running Tests
+
+Use the unified test script to run tests across any project:
+
+```bash
+# Run a specific test file
+./scripts/test.sh opencollective-frontend/components/MyComponent.test.tsx
+
+# Run tests in watch mode
+./scripts/test.sh --watch opencollective-api/test/server/lib/mylib.test.ts
+```
+
+The script automatically detects the project (frontend, api, pdf, rest) and runs the appropriate test command.
+
+---
+
+## Manual Setup (Without DevContainer)
+
+If you prefer not to use DevContainers:
+
+1. Start dependencies: `./scripts/start-dependencies.sh`
+2. Navigate to individual project directories (`opencollective-api`, `opencollective-frontend`)
+3. Follow the setup instructions in their README files
+
+---
+
+## Contributing to the Monorepo
+
+The `init.sh` script removes `.git` after setup to avoid VS Code conflicts. To make changes to the monorepo itself:
+
+```bash
+./scripts/restore-git.sh   # Restore git
+# Make your changes and commits
+./scripts/remove-git.sh    # Remove git again
+```

@@ -15,9 +15,11 @@ show_help() {
     echo "  frontend           Start frontend service"
     echo "  api                Start API service"
     echo "  pdf                Start PDF service"
+    echo "  rest               Start REST API service"
+    echo "  images             Start images service"
     echo ""
     echo "Examples:"
-    echo "  $0                 Start all services (default)"
+    echo "  $0                 Start frontend and API (default)"
     echo "  $0 frontend        Start frontend only"
     echo "  $0 frontend:staging Start frontend with staging environment"
     echo "  $0 frontend api    Start frontend and API"
@@ -40,6 +42,8 @@ declare -A SERVICE_CONFIG
 SERVICE_CONFIG[frontend]="opencollective-frontend"
 SERVICE_CONFIG[api]="opencollective-api"
 SERVICE_CONFIG[pdf]="opencollective-pdf"
+SERVICE_CONFIG[rest]="opencollective-rest"
+SERVICE_CONFIG[images]="opencollective-images"
 
 # Parse command line arguments
 BACKGROUND=false
@@ -120,10 +124,19 @@ generate_pm2_config() {
 };" > "$config_file"
 }
 
-# If no services specified, use all services from default config
+# If no services specified, default to frontend and API
 if [ ${#SERVICES[@]} -eq 0 ]; then
-    echo "Starting all services with PM2..."
-    npx pm2 start ./scripts/pm2-all.config.js
+    echo "Starting default services (frontend and API) with PM2..."
+    SERVICES=("frontend" "api")
+    TEMP_CONFIG="./scripts/pm2-temp.config.js"
+    generate_pm2_config "$TEMP_CONFIG"
+    
+    echo "Starting services with PM2..."
+    echo "Services: ${SERVICES[*]}"
+    npx pm2 start "$TEMP_CONFIG"
+    
+    # Clean up temp config
+    rm -f "$TEMP_CONFIG"
 else
     # Generate dynamic config
     TEMP_CONFIG="./scripts/pm2-temp.config.js"

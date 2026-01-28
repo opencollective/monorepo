@@ -20,9 +20,11 @@ The API connects to **PostgreSQL** as the primary database. The API service also
 ## Core Services
 
 ### 1. **opencollective-api** (Main Backend API)
+
 The primary GraphQL API service that handles all business logic, data persistence, and integrations.
 
 **Tech Stack:**
+
 - **Runtime**: Node.js
 - **Framework**: Express
 - **API**: GraphQL (Apollo Server) with two schema versions: V1 (legacy) and V2 (modern)
@@ -40,6 +42,7 @@ The primary GraphQL API service that handles all business logic, data persistenc
 - **Testing**: Mocha, Sinon, Chai
 
 **Key Features:**
+
 - GraphQL API
 - Payment processing and webhooks
 - Email notifications
@@ -48,13 +51,15 @@ The primary GraphQL API service that handles all business logic, data persistenc
 - Cron jobs for scheduled tasks
 
 ### 2. **opencollective-frontend** (Main Web Application)
+
 The user-facing web application built with Next.js and React.
 
 **Tech Stack:**
+
 - **Framework**: Next.js
 - **UI Library**: React
 - **Language**: TypeScript
-- **Styling**: 
+- **Styling**:
   - Tailwind CSS (primary, utility-first)
   - Styled Components / Styled System (legacy, being migrated to tailwind)
 - **UI Components**: Radix UI (headless components)
@@ -68,9 +73,11 @@ The user-facing web application built with Next.js and React.
 - **Build**: Webpack, Babel
 
 ### 3. **opencollective-rest** (REST API Service)
+
 A REST API wrapper around the GraphQL API for legacy integrations and simpler HTTP endpoints.
 
 **Tech Stack:**
+
 - **Runtime**: Node.js
 - **Framework**: Express
 - **Language**: TypeScript
@@ -78,9 +85,11 @@ A REST API wrapper around the GraphQL API for legacy integrations and simpler HT
 - **Build**: Babel
 
 ### 4. **opencollective-pdf** (PDF Generation Service)
+
 A microservice dedicated to generating PDF documents (receipts, invoices, reports).
 
 **Tech Stack:**
+
 - **Runtime**: Node.js
 - **Framework**: Express
 - **Language**: TypeScript (ES modules)
@@ -89,26 +98,32 @@ A microservice dedicated to generating PDF documents (receipts, invoices, report
 - **GraphQL Client**: Apollo Client
 
 ### 5. **opencollective-taxes** (Tax Calculation Library)
+
 A shared library for calculating taxes, VAT, and related financial computations.
 
 **Tech Stack:**
+
 - **Language**: TypeScript
-- **Libraries**: 
+- **Libraries**:
   - jsvat-next (VAT validation)
   - sales-tax (tax calculations)
 - **Testing**: Jest
 
 ### 6. **opencollective-images** (Image Processing Service)
+
 Service for image upload, processing, and optimization.
 
 **Tech Stack:**
+
 - Image processing and optimization
 - Integration with S3/MinIO storage
 
 ### 7. **opencollective-tools** (Utility Tools)
+
 Collection of utility scripts and tools for maintenance and operations. Ignore this repository.
 
 ### 8. **opencollective-watch** (Monitoring Service)
+
 Service for monitoring and observability. Ignore this repository.
 
 ## Infrastructure & DevOps
@@ -121,3 +136,26 @@ Service for monitoring and observability. Ignore this repository.
 - **Email**: Mailpit (local dev), production email service
 - **Search**: OpenSearch
 - **Monitoring**: Sentry, OpenTelemetry, Hyperwatch
+
+## Development Scripts
+
+The `/scripts` directory contains useful development utilities:
+
+### Running Tests
+
+Use `./scripts/test.sh` to run tests for any file across projects:
+
+```bash
+# Run a specific test file
+./scripts/test.sh opencollective-frontend/components/MyComponent.test.tsx
+
+# Run tests in watch mode
+./scripts/test.sh --watch opencollective-api/test/server/lib/mylib.test.ts
+```
+
+The script automatically detects the project from the file path and runs the appropriate test command:
+
+- **opencollective-frontend**: Jest (`npm run test`)
+- **opencollective-api**: Mocha (`npm run test`)
+- **opencollective-pdf**: Vitest (`npm run test`)
+- **opencollective-rest**: Jest (`npm run test`)
