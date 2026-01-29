@@ -41,7 +41,7 @@ This clones all Open Collective projects into a single workspace.
 DevContainers give you a fully configured development environment with all dependencies ready to go.
 
 1. Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-2. Open `opencollective-workspace-simple.code-workspace` (includes frontend + API)
+2. Open the monorepo in VS Code or Cursor.
 3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and select **"Dev Containers: Reopen in Container"**
 
 VS Code will start with PostgreSQL, Mailpit, and other services running automatically.

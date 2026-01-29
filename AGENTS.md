@@ -17,6 +17,8 @@ The **opencollective-frontend** (Next.js/React web application) serves as the pr
 
 The API connects to **PostgreSQL** as the primary database. The API service also uses **Redis** for session management and caching.
 
+Each subfolder is a separate repository. Whenever running git commands, make sure to run them from the relevant subfolders.
+
 ## Core Services
 
 ### 1. **opencollective-api** (Main Backend API)
