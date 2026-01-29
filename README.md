@@ -12,7 +12,7 @@ This workspace serves as:
 ## Why use this monorepo?
 
 1. It makes the whole setup easier. Dependencies are started automatically (in Docker).
-2. Dev containers make it safer to run the code, and will especially prevent:
+2. Dev containers make it safer to run the code, and will especially limit:
    - Attacks through the dependency chain (local packages don't get access to the host)
    - Prompt injection attacks when using an agent
 
