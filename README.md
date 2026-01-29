@@ -48,7 +48,7 @@ VS Code will start with PostgreSQL, Mailpit, and other services running automati
 
 ### 3. Start the Application
 
-Run the start script to launch the frontend, API, and PDF services:
+Run the start script to launch the frontend and API:
 
 ```bash
 ./scripts/run.sh
