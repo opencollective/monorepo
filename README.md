@@ -9,6 +9,15 @@ This workspace serves as:
 - **Shared IDE Configuration**: VS Code workspace settings and extensions
 - **Common Tools & Configs**: Shared configs, scripts, and development utilities
 
+## Why use this monorepo?
+
+1. It makes the whole setup easier. Dependencies are started automatically (in Docker).
+2. Dev containers make it safer to run the code, and will especially prevent:
+   - Attacks through the dependency chain (local packages don't get access to the host)
+   - Prompt injection attacks when using an agent
+
+To take full advantage of these benefits, it is recommended that you go through the "Additional recommendations" section below after setting up the monorepo.
+
 ## Getting Started
 
 ### Prerequisites
@@ -49,6 +58,7 @@ Run the start script to launch the frontend, API, and PDF services:
 
 - Frontend: [http://localhost:3000](http://localhost:3000)
 - API: [http://localhost:3060](http://localhost:3060)
+- Mail server: [http://localhost:1080](http://localhost:1080)
 
 **Start specific services:**
 
@@ -73,6 +83,13 @@ Use the unified test script to run tests across any project:
 ```
 
 The script automatically detects the project (frontend, api, pdf, rest) and runs the appropriate test command.
+
+---
+
+## Additional recommendations
+
+- **NEVER** store production secrets in these repositories. If you need to use production secrets, clone a separate instance of the repository that is dedicated to that purpose, and never use it with agents/for development.
+- In VSCode settings, set `dev.containers.enableGPGAgentForwarding` and `dev.containers.enableSSHAgentForwarding` to false, and use git from the host machine. This will prevent the dev container from using the host machine's git configuration, which could be exploited by malicious code to silently push updates.
 
 ---
 
