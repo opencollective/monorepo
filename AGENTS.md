@@ -19,6 +19,11 @@ The API connects to **PostgreSQL** as the primary database. The API service also
 
 Each subfolder is a separate repository. Whenever running git commands, make sure to run them from the relevant subfolders.
 
+## Concepts
+
+- Orders: generally called "Contributions" in the frontend.
+- Collectives: exposed as "Accounts" by the GraphQL API, we tend to increasingly use this term everywhere.
+
 ## Core Services
 
 ### 1. **opencollective-api** (Main Backend API)

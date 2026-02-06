@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Run tests for a specific file across different Open Collective projects
-# Usage: ./scripts/test.sh [--watch] <path-to-test-file>
+# Run tests for specific file(s) across different Open Collective projects
+# Usage: ./scripts/test.sh [--watch] <path-to-test-file> [path-to-test-file ...]
 # Example: ./scripts/test.sh opencollective-frontend/components/edit-collective/sections/ReceivingMoney.test.tsx
 # Example: ./scripts/test.sh --watch opencollective-api/test/server/lib/collectivelib.test.ts
+# Example: ./scripts/test.sh opencollective-api/test/foo.test.ts opencollective-api/test/bar.test.ts --watch
 
 set -e
 
@@ -15,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Parse arguments
 WATCH_MODE=false
-TEST_PATH=""
+TEST_PATHS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -24,7 +25,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [--watch] <path-to-test-file>"
+            echo "Usage: $0 [--watch] <path-to-test-file> [path-to-test-file ...]"
             echo ""
             echo "Options:"
             echo "  --watch, -w    Run tests in watch mode"
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
             echo "Examples:"
             echo "  $0 opencollective-frontend/components/MyComponent.test.tsx"
             echo "  $0 --watch opencollective-api/test/server/lib/mylib.test.ts"
+            echo "  $0 opencollective-api/test/foo.test.ts opencollective-api/test/bar.test.ts"
             echo "  $0 opencollective-pdf/test/some.test.ts"
             echo "  $0 opencollective-rest/test/some.test.ts"
             exit 0
@@ -42,41 +44,56 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
         *)
-            TEST_PATH="$1"
+            TEST_PATHS+=("$1")
             shift
             ;;
     esac
 done
 
-# Validate that a test path was provided
-if [[ -z "$TEST_PATH" ]]; then
-    echo -e "${RED}Error: No test path provided${NC}" >&2
-    echo "Usage: $0 [--watch] <path-to-test-file>"
+# Validate that at least one test path was provided
+if [[ ${#TEST_PATHS[@]} -eq 0 ]]; then
+    echo -e "${RED}Error: No test path(s) provided${NC}" >&2
+    echo "Usage: $0 [--watch] <path-to-test-file> [path-to-test-file ...]"
     exit 1
 fi
 
-# Determine the project from the path
-# The path should start with the project directory name
+# Helper to get project and relative path for a given path
+get_project_and_relative_path() {
+    local path="$1"
+    if [[ "$path" == opencollective-frontend/* ]]; then
+        echo "opencollective-frontend ${path#opencollective-frontend/}"
+    elif [[ "$path" == opencollective-api/* ]]; then
+        echo "opencollective-api ${path#opencollective-api/}"
+    elif [[ "$path" == opencollective-pdf/* ]]; then
+        echo "opencollective-pdf ${path#opencollective-pdf/}"
+    elif [[ "$path" == opencollective-rest/* ]]; then
+        echo "opencollective-rest ${path#opencollective-rest/}"
+    else
+        echo ""
+    fi
+}
+
+# Determine project from first path and collect relative paths (all must be same project)
 PROJECT=""
-RELATIVE_PATH=""
+RELATIVE_PATHS=()
 
-if [[ "$TEST_PATH" == opencollective-frontend/* ]]; then
-    PROJECT="opencollective-frontend"
-    RELATIVE_PATH="${TEST_PATH#opencollective-frontend/}"
-elif [[ "$TEST_PATH" == opencollective-api/* ]]; then
-    PROJECT="opencollective-api"
-    RELATIVE_PATH="${TEST_PATH#opencollective-api/}"
-elif [[ "$TEST_PATH" == opencollective-pdf/* ]]; then
-    PROJECT="opencollective-pdf"
-    RELATIVE_PATH="${TEST_PATH#opencollective-pdf/}"
-elif [[ "$TEST_PATH" == opencollective-rest/* ]]; then
-    PROJECT="opencollective-rest"
-    RELATIVE_PATH="${TEST_PATH#opencollective-rest/}"
-else
-    echo -e "${RED}Error: Could not determine project from path: $TEST_PATH${NC}" >&2
-    echo "Path should start with one of: opencollective-frontend/, opencollective-api/, opencollective-pdf/, opencollective-rest/"
-    exit 1
-fi
+for TEST_PATH in "${TEST_PATHS[@]}"; do
+    result=$(get_project_and_relative_path "$TEST_PATH")
+    if [[ -z "$result" ]]; then
+        echo -e "${RED}Error: Could not determine project from path: $TEST_PATH${NC}" >&2
+        echo "Path should start with one of: opencollective-frontend/, opencollective-api/, opencollective-pdf/, opencollective-rest/"
+        exit 1
+    fi
+    path_project="${result%% *}"
+    path_relative="${result#* }"
+    if [[ -z "$PROJECT" ]]; then
+        PROJECT="$path_project"
+    elif [[ "$PROJECT" != "$path_project" ]]; then
+        echo -e "${RED}Error: All test files must be from the same project (got $PROJECT and $path_project)${NC}" >&2
+        exit 1
+    fi
+    RELATIVE_PATHS+=("$path_relative")
+done
 
 # Get workspace root (parent of scripts directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -92,16 +109,16 @@ fi
 # Determine the test command
 if [[ "$WATCH_MODE" == true ]]; then
     TEST_CMD="test:watch"
-    echo -e "${GREEN}Running tests in watch mode for: $TEST_PATH${NC}"
+    echo -e "${GREEN}Running tests in watch mode for: ${TEST_PATHS[*]}${NC}"
 else
     TEST_CMD="test"
-    echo -e "${GREEN}Running tests for: $TEST_PATH${NC}"
+    echo -e "${GREEN}Running tests for: ${TEST_PATHS[*]}${NC}"
 fi
 
 echo -e "${YELLOW}Project: $PROJECT${NC}"
-echo -e "${YELLOW}Relative path: $RELATIVE_PATH${NC}"
+echo -e "${YELLOW}Relative path(s): ${RELATIVE_PATHS[*]}${NC}"
 echo ""
 
-# Run the test command in the project directory
+# Run the test command in the project directory (pass all relative paths)
 cd "$PROJECT_DIR"
-npm run "$TEST_CMD" -- "$RELATIVE_PATH"
+npm run "$TEST_CMD" -- "${RELATIVE_PATHS[@]}"

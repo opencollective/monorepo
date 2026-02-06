@@ -18,7 +18,6 @@
     "*.code-workspace": true,
     "**/dist/*": true,
     "opencollective-images/": true,
-    "opencollective-rest/": true,
     "opencollective-taxes/": true,
     "opencollective-tools/": true,
     "opencollective-watch/": true,

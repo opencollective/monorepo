@@ -26,7 +26,8 @@
       "extensions": [
         "prettier.prettier-vscode",
         "dbaeumer.vscode-eslint",
-        "bradlc.vscode-tailwindcss"
+        "bradlc.vscode-tailwindcss",
+        "thebearingedge.vscode-sql-lit"
       ]
     }
   },
@@ -34,6 +35,11 @@
   "portsAttributes": {
     "3000": {
       "label": "Frontend",
+      "onAutoForward": "notify",
+      "requireLocalPort": true
+    },
+    "3003": {
+      "label": "REST",
       "onAutoForward": "notify",
       "requireLocalPort": true
     },
