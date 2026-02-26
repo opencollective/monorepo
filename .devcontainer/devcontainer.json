@@ -3,7 +3,7 @@
 {
   "name": "Open Collective",
   "dockerComposeFile": [
-    "../opencollective.node.docker-compose.yml",
+    "../opencollective.node.docker-compose.yml", // Shell for VSCode terminal
     "../opencollective-api/docker-compose/db.yml",
     // "../opencollective-api/docker-compose/search.yml",
     "../opencollective-api/docker-compose/mail.yml",

@@ -34,8 +34,9 @@
     "**/graphql/types/v2/gql.d.ts": true,
     "**/graphql/types/v2/gql.ts": true,
     "**/graphql/types/v2/graphql.ts": true,
-    "**/graphql/types/v2/schema.ts": true,
     "logs/": true,
-    "**/tsconfig.tsbuildinfo": true
+    "**/tsconfig.tsbuildinfo": true,
+    "opencollective/.github/aw/logs/": true,
+    "**/.nyc_output/": true
   }
 }
