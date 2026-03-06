@@ -77,6 +77,10 @@ The user-facing web application built with Next.js and React.
 - **Animations**: Framer Motion
 - **Testing**: Jest, React Testing Library, Cypress (E2E)
 
+**Tips**
+
+- Search existing translations: See .agents/skills/search-i18n-translations/SKILL.md
+
 ### 3. **opencollective-rest** (REST API Service)
 
 A REST API wrapper around the GraphQL API for legacy integrations and simpler HTTP endpoints.
@@ -165,13 +169,13 @@ The script automatically detects the project from the file path and runs the app
 - **opencollective-pdf**: Vitest (`npm run test`)
 - **opencollective-rest**: Jest (`npm run test`)
 
-## Security Audits (API)
+## Security Audits
 
 When running a security audit on one of the projects, follow these guidelines.
 
 ### Output Format
 
-Store findings in `security-audit/` with severity-based directories and CVSS-prefixed filenames:
+Store findings in `priv/security-audit/` with severity-based directories and CVSS-prefixed filenames:
 
 ```
 security-issues/
@@ -212,6 +216,8 @@ NEVER commit any of your findings to the repository.
 When uncertain, use the midpoint (Critical: 9.5, High: 7.5, Medium: 5.5, Low: 2.0).
 
 ### Context from Past Audits
+
+#### API
 
 - **Webhooks:** Stripe, PayPal, and Transferwise verify signatures; `rawBody` is set for `/webhooks` routes in express.ts. Idempotency handled via existing transaction lookups.
 - **SQL:** `queries.js`, `sql-search.ts` use parameterized queries; Kysely collection queries use proper parameterization.

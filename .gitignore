@@ -2,5 +2,4 @@ logs
 test
 opencollective/
 opencollective-*/
-security-audit/*
-
+priv/*
