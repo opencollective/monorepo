@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Feature Tests"
+  short_description: "Review test coverage of a feature and propose improvement plan"
+  default_prompt: "Review the test coverage for [feature/module] and propose a plan to improve coverage where needed."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Search i18n Translations"
+  short_description: "Search opencollective-frontend/lang/en.json for existing i18n strings"
+  default_prompt: "Use $search-i18n-translations to search opencollective-frontend/lang/en.json for existing i18n strings."

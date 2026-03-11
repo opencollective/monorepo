@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Review: Feature"
+  short_description: "Review a feature for security issues"
+  default_prompt: "Use $review-feature-security to review the security of this new feature."
