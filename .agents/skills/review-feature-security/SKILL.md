@@ -1,5 +1,6 @@
 ---
 name: review-feature-security
+disable-model-invocation: true
 description: >
   Performs a structured security review of a specific feature, PR, or code change
   in the Open Collective codebase. Use when asked to review the security of a new

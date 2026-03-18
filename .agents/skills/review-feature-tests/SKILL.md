@@ -1,5 +1,6 @@
 ---
 name: review-feature-tests
+disable-model-invocation: true
 description: Reviews the test coverage of a feature in Open Collective and proposes a plan to improve coverage when needed. Use when asked to review tests for a feature, assess test coverage, find coverage gaps, or plan new tests. Covers opencollective-frontend (Jest), opencollective-api (Mocha), opencollective-pdf (Vitest), and opencollective-rest (Jest).
 ---
 
@@ -14,11 +15,13 @@ Analyzes test coverage for a given feature or module, identifies gaps, and produ
 ### 1. Identify the Feature and Its Scope
 
 Determine the feature to review. It may be:
+
 - **Path-based**: e.g. `opencollective-api/server/graphql/v2/mutation/ExpenseMutations`
 - **Keyword-based**: e.g. "expense approval", "virtual cards", "host dashboard"
 - **Component-based**: e.g. `opencollective-frontend/components/edit-collective/sections/ReceivingMoney`
 
 Map the feature to the relevant project:
+
 - **opencollective-frontend**: Jest (`components/`, `lib/`, `pages/`), Cypress E2E (`test/cypress/`)
 - **opencollective-api**: Mocha (`test/server/`), tests mirror source structure
 - **opencollective-pdf**: Vitest
@@ -33,6 +36,7 @@ Use the discovery script to find tests that cover the feature:
 ```
 
 Examples:
+
 - `list-feature-tests.sh opencollective-api server/graphql/v2/mutation/ExpenseMutations`
 - `list-feature-tests.sh opencollective-frontend ReceivingMoney`
 - `list-feature-tests.sh opencollective-api expense`
@@ -70,6 +74,7 @@ Or use the coverage script:
 ### 4. Analyze Coverage Gaps
 
 Read the implementation and test files. Identify:
+
 - **Untested code paths**: Branches, error handlers, edge cases
 - **Missing scenarios**: Happy path vs. error paths, permissions, validation
 - **Integration gaps**: GraphQL resolvers without loader tests, API without route tests
@@ -86,6 +91,7 @@ Produce a structured plan:
 3. **Priority 3 – Nice to have**: Edge cases, refactor safety nets
 
 For each gap:
+
 - **Location**: File and function/path
 - **Gap**: What is not tested
 - **Suggested test**: Unit, integration, or E2E; describe the scenario
@@ -93,13 +99,13 @@ For each gap:
 
 ## Test Frameworks Reference
 
-| Project | Framework | Test Dir | Pattern |
-|---------|-----------|----------|---------|
-| opencollective-frontend | Jest | components/, lib/, pages/ | `*.test.tsx`, `__tests__/` |
-| opencollective-frontend | Cypress | test/cypress/integration/ | `*.test.js` |
-| opencollective-api | Mocha | test/server/ | Mirrors source, `*.test.ts` or `.test.js` |
-| opencollective-pdf | Vitest | test/ | `*.test.ts` |
-| opencollective-rest | Jest | test/ | `*.test.ts` |
+| Project                 | Framework | Test Dir                  | Pattern                                   |
+| ----------------------- | --------- | ------------------------- | ----------------------------------------- |
+| opencollective-frontend | Jest      | components/, lib/, pages/ | `*.test.tsx`, `__tests__/`                |
+| opencollective-frontend | Cypress   | test/cypress/integration/ | `*.test.js`                               |
+| opencollective-api      | Mocha     | test/server/              | Mirrors source, `*.test.ts` or `.test.js` |
+| opencollective-pdf      | Vitest    | test/                     | `*.test.ts`                               |
+| opencollective-rest     | Jest      | test/                     | `*.test.ts`                               |
 
 ## Scripts
 

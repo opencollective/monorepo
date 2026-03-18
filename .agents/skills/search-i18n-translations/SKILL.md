@@ -55,4 +55,13 @@ When a suitable translation exists, use it with `FormattedMessage`:
 <FormattedMessage defaultMessage="Select a payout method" id="Ri4REE" />
 ```
 
+Alternatively, when a string is needed as the output, use `intl.formatMessage`:
+
+```tsx
+const itemLabel = intl.formatMessage({
+  id: "Ri4REE",
+  defaultMessage: "Select a payout method",
+});
+```
+
 Prefer reusing existing translations over adding new keys to keep the translation set maintainable.

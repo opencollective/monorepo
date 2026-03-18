@@ -3,3 +3,4 @@ test
 opencollective/
 opencollective-*/
 priv/*
+package-lock.json
