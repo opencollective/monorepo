@@ -1,0 +1,27 @@
+[submodule "opencollective"]
+	path = opencollective
+	url = git@github.com:opencollective/opencollective.git
+[submodule "opencollective-api"]
+	path = opencollective-api
+	url = git@github.com:opencollective/opencollective-api.git
+[submodule "opencollective-documentation"]
+	path = opencollective-documentation
+	url = git@github.com:opencollective/documentation.git
+[submodule "opencollective-frontend"]
+	path = opencollective-frontend
+	url = git@github.com:opencollective/opencollective-frontend.git
+[submodule "opencollective-images"]
+	path = opencollective-images
+	url = git@github.com:opencollective/opencollective-images.git
+[submodule "opencollective-pdf"]
+	path = opencollective-pdf
+	url = git@github.com:opencollective/opencollective-pdf.git
+[submodule "opencollective-rest"]
+	path = opencollective-rest
+	url = git@github.com:opencollective/opencollective-rest.git
+[submodule "opencollective-studies"]
+	path = opencollective-studies
+	url = git@github.com:oficonsortium/studies.git
+[submodule "opencollective-taxes"]
+	path = opencollective-taxes
+	url = git@github.com:opencollective/opencollective-taxes.git

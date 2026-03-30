@@ -100,15 +100,3 @@ If you prefer not to use DevContainers:
 1. Start dependencies: `./scripts/start-dependencies.sh`
 2. Navigate to individual project directories (`opencollective-api`, `opencollective-frontend`)
 3. Follow the setup instructions in their README files
-
----
-
-## Contributing to the Monorepo
-
-The `init.sh` script removes `.git` after setup to avoid VS Code conflicts. To make changes to the monorepo itself:
-
-```bash
-./scripts/restore-git.sh   # Restore git
-# Make your changes and commits
-./scripts/remove-git.sh    # Remove git again
-```

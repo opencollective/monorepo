@@ -150,10 +150,6 @@ main() {
     
     echo "================================================="
     print_status "Check README.md for the next steps. Happy coding! 🚀"
-    
-    # Final stage: Remove git configuration
-    print_status "Removing git configuration from root folder..."
-    "$SCRIPT_DIR/remove-git.sh"
 }
 
 # Run main function
