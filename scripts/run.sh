@@ -133,7 +133,7 @@ if [ ${#SERVICES[@]} -eq 0 ]; then
     
     echo "Starting services with PM2..."
     echo "Services: ${SERVICES[*]}"
-    npx pm2 start "$TEMP_CONFIG"
+    npx pm2 startOrRestart "$TEMP_CONFIG"
     
     # Clean up temp config
     rm -f "$TEMP_CONFIG"
@@ -144,7 +144,7 @@ else
     
     echo "Starting services with PM2..."
     echo "Services: ${SERVICES[*]}"
-    npx pm2 start "$TEMP_CONFIG"
+    npx pm2 startOrRestart "$TEMP_CONFIG"
     
     # Clean up temp config
     rm -f "$TEMP_CONFIG"

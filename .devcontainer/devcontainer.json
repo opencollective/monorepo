@@ -10,9 +10,11 @@
     "../opencollective-api/docker-compose/uploads.yml"
   ],
   "service": "dev",
+  "shutdownAction": "stopCompose",
   "containerEnv": {
     "PG_HOST": "postgres",
-    "MAILPIT_HOST": "mailpit"
+    "MAILPIT_HOST": "mailpit",
+    "AWS_S3_ENDPOINT": "http://minio:9000"
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {

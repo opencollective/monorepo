@@ -59,6 +59,8 @@ The primary GraphQL API service that handles all business logic, data persistenc
 - All new files (including migrations and tests) should use Typescript.
 - Unless specified, avoid migrating existing files from Javascript to Typescript.
 
+**PayPal recurring subscriptions (managed externally):** For subscriptions with `Subscription.isManagedExternally` and a `paypalSubscriptionId`, `Orders.totalAmount` must match the amount on the PayPal billing plan (`plan_id` / `PaypalPlans`). PayPal is the source of truth for what is charged. The GraphQL `updateOrder` mutation requires a new `paypalSubscriptionId` after the contributor completes PayPal’s approval flow when changing amount or tier; applying amount or tier changes without that flow would desynchronize the database from PayPal. To audit drift, run [`scripts/paypal/check-subscriptions-amounts.ts`](opencollective-api/scripts/paypal/check-subscriptions-amounts.ts) (defaults to subscriptions updated in the last 7 days; override with `PAYPAL_SUBSCRIPTION_AMOUNT_CHECK_LOOKBACK_DAYS` or `--lookback-days`).
+
 ### 2. **opencollective-frontend** (Main Web Application)
 
 The user-facing web application built with Next.js and React.
@@ -146,9 +148,7 @@ Service for monitoring and observability. Ignore this repository.
 - **Search**: OpenSearch
 - **Monitoring**: Sentry, OpenTelemetry, Hyperwatch
 
-## Development Scripts
-
-The `/scripts` directory contains useful development utilities:
+## Development
 
 ### Running Tests
 
@@ -168,6 +168,17 @@ The script automatically detects the project from the file path and runs the app
 - **opencollective-api**: Mocha (`npm run test`)
 - **opencollective-pdf**: Vitest (`npm run test`)
 - **opencollective-rest**: Jest (`npm run test`)
+
+## Testing manually
+
+If available, after starting the frontend and API (./scripts/run.sh), you can start a browser at http://localhost:3000 and login with the test user `testuser+admin@opencollective.com` (no password needed).
+
+## Connect to the database
+
+You can manually query the dev/test databases:
+
+- `psql postgres://opencollective@postgres/opencollective_dvl` to connect to the development database
+- `psql postgres://opencollective@postgres/opencollective_test` to connect to the test database
 
 ## Security Audits
 
