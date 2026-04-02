@@ -150,6 +150,17 @@ Service for monitoring and observability. Ignore this repository.
 
 ## Development
 
+### Commit message format
+
+Across repositories we follow the same conventions. The base format is [Conventional Commits](https://www.conventionalcommits.org/): use a type and scope as appropriate (`feat`, `fix`, `chore`, `docs`, etc.), and keep the first line as a concise title. Many repos offer [commitizen](https://github.com/commitizen/cz-cli) via `npm run commit` after `git add`; using it is optional but helps learn the pattern (see each repo’s `CONTRIBUTING.md` for details).
+
+Beyond that:
+
+- Keep commit messages reasonably short; avoid very long titles and bodies.
+- Prefer **context and user-visible impact** in the title over a dry summary of edits. Good: `fix(search): crash when searching with special characters`. Weak: `fix: update regexp in search.ts`.
+- After the title, add a blank line, then **link or reference related issues** when you have them (e.g. `Fixes #123` or a URL).
+- The body may also briefly **summarize what changed in the code** when that helps reviewers and future readers.
+
 ### Running Tests
 
 Use `./scripts/test.sh` to run tests for any file across projects:
