@@ -59,6 +59,10 @@ The primary GraphQL API service that handles all business logic, data persistenc
 - All new files (including migrations and tests) should use Typescript.
 - Unless specified, avoid migrating existing files from Javascript to Typescript.
 
+**Zero-decimal currencies (JPY, KRW, etc.):**
+
+All monetary amounts in the database are stored multiplied by 100, regardless of currency — including zero-decimal currencies. So ¥15 is stored as `1500`, exactly like $15.00. The list of zero-decimal currencies is in `server/constants/currencies.ts` (`ZERO_DECIMAL_CURRENCIES`).
+
 **PayPal recurring subscriptions (managed externally):** For subscriptions with `Subscription.isManagedExternally` and a `paypalSubscriptionId`, `Orders.totalAmount` must match the amount on the PayPal billing plan (`plan_id` / `PaypalPlans`). PayPal is the source of truth for what is charged. The GraphQL `updateOrder` mutation requires a new `paypalSubscriptionId` after the contributor completes PayPal’s approval flow when changing amount or tier; applying amount or tier changes without that flow would desynchronize the database from PayPal. To audit drift, run [`scripts/paypal/check-subscriptions-amounts.ts`](opencollective-api/scripts/paypal/check-subscriptions-amounts.ts) (defaults to subscriptions updated in the last 7 days; override with `PAYPAL_SUBSCRIPTION_AMOUNT_CHECK_LOOKBACK_DAYS` or `--lookback-days`).
 
 ### 2. **opencollective-frontend** (Main Web Application)
@@ -160,6 +164,7 @@ Beyond that:
 - Prefer **context and user-visible impact** in the title over a dry summary of edits. Good: `fix(search): crash when searching with special characters`. Weak: `fix: update regexp in search.ts`.
 - After the title, add a blank line, then **link or reference related issues** when you have them (e.g. `Fixes #123` or a URL).
 - The body may also briefly **summarize what changed in the code** when that helps reviewers and future readers.
+- When generating texts, avoid using "—" (em dash) and use "-" (hyphen) instead.
 
 ### Running Tests
 

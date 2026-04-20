@@ -4,6 +4,8 @@
 #
 #  Main use case: running scripts or commands in a safe/isolated/historyless/self-destroying environment.
 #
+# Pro tip: OC_ENV=production EXTRA_ENV=production NODE_ENV=production PGSSLMODE=require PG_DATABASE=... PG_URL=... npm run script
+#
 
 set -euo pipefail
 
@@ -72,5 +74,6 @@ exec docker run --rm -it --init -u root \
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq && apt-get install -y -qq postgresql-client || echo 'Warning: postgresql-client install failed; psql may be unavailable.' >&2
     cd '/workspace/${DEST_NAME}'
+    npm install --omit=dev --ignore-scripts
     exec bash -l
   "
