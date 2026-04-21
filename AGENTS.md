@@ -257,3 +257,51 @@ Do **not** report the following as findings; they are intentional:
 
 - **GraphQL introspection enabled:** The API is public; introspection is on purpose.
 - **Permissive CORS:** The API is public; CORS is intentionally permissive.
+
+## Cursor Cloud specific instructions
+
+### Environment Overview
+
+The monorepo workspace clones sub-repositories into `/workspace/opencollective-*` directories. Each is its own git repo; run git commands from the relevant subdirectory.
+
+### Infrastructure Services (Docker)
+
+Docker-compose resource limits (`deploy.resources.limits`) in the compose YAML files fail in the Cloud Agent nested container environment due to cgroup restrictions. Run containers directly instead:
+
+```bash
+sudo dockerd &>/tmp/dockerd.log &
+sudo docker run -d --name opencollective-postgres -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -v opencollective-postgres-data:/var/lib/postgresql/data postgres:16
+sudo docker run -d --name mailpit -p 1080:8025 -p 1025:1025 -e MP_MAX_MESSAGES=5000 -e MP_SMTP_AUTH_ACCEPT_ANY=1 -e MP_SMTP_AUTH_ALLOW_INSECURE=1 axllent/mailpit
+sudo docker run -d --name minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=user -e MINIO_ROOT_PASSWORD=password -v minio-data:/data minio/minio:latest server /data --console-address :9001
+```
+
+### Starting Services
+
+Use PM2 via the monorepo scripts: `./scripts/run.sh -b frontend api`
+
+Or start individually:
+- **API**: `cd opencollective-api && npm run dev` (port 3060)
+- **Frontend**: `cd opencollective-frontend && npm run dev` (port 3000)
+
+The frontend `.env` must contain `API_URL=http://localhost:3060` and `API_KEY=dvl-1510egmf4a23d80342403fb599qd` to connect to the local API.
+
+### Running Tests
+
+- **API lint**: `cd opencollective-api && npm run lint:check`
+- **API tests**: `cd opencollective-api && npm run test -- test/server/models/SomeModel.test.ts` (requires test DB: `npm run db:restore:test`)
+- **Frontend lint**: `cd opencollective-frontend && npx eslint --quiet -- <file>`
+- **Frontend tests**: `cd opencollective-frontend && npm run test -- lib` (or `components`, `pages`)
+- **Cross-project test helper**: `./scripts/test.sh opencollective-api/test/server/models/SocialLink.test.ts`
+
+### Database
+
+- Dev DB: `opencollective_dvl` (auto-restored on `npm install` via postinstall, or manually with `npm run db:restore`)
+- Test DB: `opencollective_test` (set up with `npm run db:restore:test`)
+- Migrations: `npm run db:migrate`
+
+### Gotchas
+
+- The API postinstall script requires PostgreSQL to be running and `psql` to be available. Use `SKIP_POSTINSTALL=1 npm install` if Postgres isn't ready yet, then run `npm run db:restore && npm run db:migrate` manually.
+- Node.js 24.x is required (see `engines` in API `package.json`). Use `nvm install 24 && nvm use 24`.
+- The `start-dependencies.sh` script uses `podman compose` which is not available in Cloud Agent VMs; use `docker run` directly as shown above.
+- Frontend Jest uses `cross-env` wrapper; pass test file patterns as positional args, not via `--testPathPattern`.
