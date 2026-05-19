@@ -92,25 +92,27 @@ main() {
         print_status "Shallow cloning mode enabled"
     fi
     
-    # List of Open Collective repositories
-    # Format: "https://github.com/opencollective/REPO_NAME" "REPO_NAME"
-    declare -a repositories=(
-        "https://github.com/opencollective/opencollective-api" "opencollective-api"
-        "https://github.com/opencollective/opencollective-frontend" "opencollective-frontend"
-        "https://github.com/opencollective/opencollective-taxes" "opencollective-taxes"
-        "https://github.com/opencollective/opencollective-tools" "opencollective-tools"
-        "https://github.com/opencollective/opencollective-watch" "opencollective-watch"
-        "https://github.com/opencollective/opencollective-rest" "opencollective-rest"
-        "https://github.com/opencollective/opencollective-rss" "opencollective-rss"
-        "https://github.com/opencollective/opencollective-pdf" "opencollective-pdf"
-        "https://github.com/opencollective/opencollective-images" "opencollective-images"
-        # "https://github.com/opencollective/contributors-svg" "contributors-svg"
-        # "https://github.com/opencollective/discover" "discover"
-        # "https://github.com/opencollective/documentation" "documentation"
-        # "https://github.com/opencollective/eslint-config-opencollective" "eslint-config"
-        # "https://github.com/opencollective/graphql-docs-v2" "graphql-docs"
-        "https://github.com/opencollective/opencollective" "opencollective"
-    )
+    # Repository list comes from .gitmodules (path + url per submodule)
+    local GITMODULES="$PROJECT_ROOT/.gitmodules"
+    if [ ! -f "$GITMODULES" ]; then
+        print_error ".gitmodules not found at $GITMODULES"
+        exit 1
+    fi
+    
+    local -a repositories=()
+    local line name path url
+    while IFS= read -r line; do
+        [[ "$line" =~ ^submodule\.([^=]+)\.path=(.*)$ ]] || continue
+        name="${BASH_REMATCH[1]}"
+        path="${BASH_REMATCH[2]}"
+        url=$(git config -f "$GITMODULES" --get "submodule.$name.url") || continue
+        repositories+=("$url" "$path")
+    done < <(git config -f "$GITMODULES" -l | grep '^submodule\..*\.path=')
+    
+    if [ "${#repositories[@]}" -eq 0 ]; then
+        print_error "No submodules found in $GITMODULES"
+        exit 1
+    fi
     
     # Clone repositories
     local failed_repos=()

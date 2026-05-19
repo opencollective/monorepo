@@ -58,6 +58,8 @@ The primary GraphQL API service that handles all business logic, data persistenc
 
 - All new files (including migrations and tests) should use Typescript.
 - Unless specified, avoid migrating existing files from Javascript to Typescript.
+- Unversioned `/graphql` serves V2; V1 is `/graphql/v1`.
+- OAuth tokens and personal tokens are rejected on V1 unless allow-listed (`application.data.enableGraphqlV1` on the app, `data.allowGraphQLV1` on the token); see `opencollective-api/server/routes.ts`.
 
 **Zero-decimal currencies (JPY, KRW, etc.):**
 
@@ -196,64 +198,14 @@ You can manually query the dev/test databases:
 - `psql postgres://opencollective@postgres/opencollective_dvl` to connect to the development database
 - `psql postgres://opencollective@postgres/opencollective_test` to connect to the test database
 
-## Security Audits
+## Security policy / Bug bounty program
 
-When running a security audit on one of the projects, follow these guidelines.
+See [SECURITY.md](https://github.com/opencollective/opencollective/blob/main/SECURITY.md).
 
-### Output Format
+## Documentation
 
-Store findings in `priv/security-audit/` with severity-based directories and CVSS-prefixed filenames:
+Public: https://documentation.opencollective.com
 
-```
-security-issues/
-├── critical/          # CVSS 9.0–10.0
-├── high/              # CVSS 7.0–8.9
-├── medium/            # CVSS 4.0–6.9
-├── low/               # CVSS 0.1–3.9
-└── SUMMARY.md
-```
+### Specific features
 
-NEVER commit any of your findings to the repository.
-
-**Filename format:** `{CVSS_SCORE}-{category}-{short-description}.md` (e.g. `7.5-auth-tokens-in-url-query-params.md`)
-
-**Finding template** (each `.md` file):
-
-- Title, CVSS score, category
-- Affected Code (file, lines)
-- Description, Impact, Evidence
-- Recommendation, References (CWE, OWASP)
-
-### What to Test (Progressive, Critical First)
-
-1. **Phase 1 – Critical:** Auth (JWT parsing, scope, token leakage), authorization (permissions, expense/order security), payments (Stripe, PayPal, Wise signature verification), SQL injection (queries.js, sql-search.ts, Kysely parameterization)
-2. **Phase 2 – High:** OAuth (redirect URI, state, token handling), GraphQL mass assignment, file uploads (path traversal, MIME), webhooks controller
-3. **Phase 3 – Medium:** Rate limiting, CORS, Helmet/CSP, session cookies (secure, httpOnly, sameSite), error handling, GraphQL Armor
-4. **Phase 4 – Low:** `npm audit`, session/store config, 2FA/WebAuthn, audit logging
-
-### Severity Assessment (CVSS)
-
-| Severity | CVSS Range | Typical Use                                                  |
-| -------- | ---------- | ------------------------------------------------------------ |
-| Critical | 9.0–10.0   | Auth bypass, RCE, SQLi, payment fraud, credential theft      |
-| High     | 7.0–8.9    | IDOR, webhook forgery, privilege escalation, mass assignment |
-| Medium   | 4.0–6.9    | Information disclosure, weak rate limits, missing validation |
-| Low      | 0.1–3.9    | Hardening opportunities, minor config issues                 |
-
-When uncertain, use the midpoint (Critical: 9.5, High: 7.5, Medium: 5.5, Low: 2.0).
-
-### Context from Past Audits
-
-#### API
-
-- **Webhooks:** Stripe, PayPal, and Transferwise verify signatures; `rawBody` is set for `/webhooks` routes in express.ts. Idempotency handled via existing transaction lookups.
-- **SQL:** `queries.js`, `sql-search.ts` use parameterized queries; Kysely collection queries use proper parameterization.
-- **Authorization:** ExpenseMutations, OrderMutations, PayoutMethodMutations perform permission checks; security/expense.ts and security/order.ts implement fraud checks.
-- **GraphQL:** Apollo Armor enforces depth, cost, tokens, aliases; rate limiting applies to GraphQL.
-
-### Known Issues / Exceptions
-
-Do **not** report the following as findings; they are intentional:
-
-- **GraphQL introspection enabled:** The API is public; introspection is on purpose.
-- **Permissive CORS:** The API is public; CORS is intentionally permissive.
+- Private organizations: opencollective-api/docs/private-organizations.md
