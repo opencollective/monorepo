@@ -26,7 +26,7 @@ Before **any** GitHub MCP call: **read the tool schema** for that tool (paramete
 - **Project name** (used in title after `[Project]`).
 - **Milestone** — usually a cycle token like `Y26C3`. **If not provided, ask** which milestone to use; resolve it to the repo milestone the GitHub MCP expects (often by **title**).
 - **Overview**, **boundaries**, and **desired outcomes** (raw notes are fine).
-- For **each sub-issue**: title, body (implementation-focused), **type** (`Enhancement`, `Task`, or `Bug`), and **optional labels** from the allowed set below.
+- For **each sub-issue**: title, body (implementation-focused), **type** (`Feature` or `Enhancement`), and **optional labels** from the allowed set below.
 
 Ask follow-up questions whenever scope, ownership, or breakdown is unclear.
 
