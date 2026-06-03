@@ -61,6 +61,15 @@ The primary GraphQL API service that handles all business logic, data persistenc
 - Unversioned `/graphql` serves V2; V1 is `/graphql/v1`.
 - OAuth tokens and personal tokens are rejected on V1 unless allow-listed (`application.data.enableGraphqlV1` on the app, `data.allowGraphQLV1` on the token); see `opencollective-api/server/routes.ts`.
 
+**New GraphQL queries and mutations (security checklist):**
+
+Whenever you add or change a V2 query or mutation resolver, review these four areas before merging. Look at similar resolvers in the same file for established patterns.
+
+1. **Permissions** - Who may call this? Host-only (`req.remoteUser.isAdminOfCollective(host)`), collective admin/accountant, contributor, root (`req.remoteUser.isRoot()`), or public/guest. Throw `Unauthorized` / `Forbidden` from `server/graphql/errors` when the caller lacks the role.
+2. **Private organizations** - If the resolver loads or returns data for an account (`Collective`), private accounts need an explicit visibility check. Use `assertCanSeeAccount` / `assertCanSeeAllAccounts` (throws `Forbidden`) or `canSeePrivateAccount` / `canSeeAllPrivateAccounts` (boolean) from `opencollective-api/server/lib/private-accounts.ts`. See `opencollective-api/docs/private-organizations.md`. Top-level account queries already gate in `AccountQuery.ts`; collection filters and nested resolvers are easy to miss.
+3. **Two-factor authentication (2FA)** - Sensitive actions (payouts, token management, payment methods, etc.) may require a fresh 2FA token. Use helpers from `opencollective-api/server/lib/two-factor-authentication/lib.ts` (imported as `twoFactorAuthLib` from `server/lib/two-factor-authentication`): `enforceForAccount`, `enforceForAccountsUserIsAdminOf`, or `validateRequest`. Clients send `x-two-factor-authentication`; reuse `TWO_FACTOR_SESSIONS_PARAMS` when a short-lived session is appropriate.
+4. **OAuth / personal token scopes** - Mutations must call a scope helper from `opencollective-api/server/graphql/common/scope-check.ts` (enforced by ESLint `graphql-mutations/require-scope-check`). Prefer domain helpers (`checkRemoteUserCanUseExpenses`, `checkRemoteUserCanUseTransactions`, etc.) or `enforceScope` / `checkScope` with scopes from `server/constants/oauth-scopes.ts`. Use `rejectOAuthAndPersonalTokenAuth(req)` when the operation must be session-only (e.g. managing tokens or OAuth apps). Opt out of the ESLint rule only for intentional public/guest mutations, with a comment explaining why.
+
 **Zero-decimal currencies (JPY, KRW, etc.):**
 
 All monetary amounts in the database are stored multiplied by 100, regardless of currency — including zero-decimal currencies. So ¥15 is stored as `1500`, exactly like $15.00. The list of zero-decimal currencies is in `server/constants/currencies.ts` (`ZERO_DECIMAL_CURRENCIES`).
