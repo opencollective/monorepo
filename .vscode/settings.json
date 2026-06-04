@@ -17,7 +17,6 @@
   "files.exclude": {
     "*.code-workspace": true,
     "**/dist/*": true,
-    "opencollective-images/": true,
     "opencollective-tools/": true,
     "opencollective-watch/": true,
     "test/": true,
