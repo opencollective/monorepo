@@ -235,7 +235,7 @@ Use the [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org) while tri
 
 **Intentional postures (not defects):** Public GraphQL introspection and permissive API CORS are intentional for this public API. Do not report them as vulnerabilities. See `.agents/skills/review-feature-security/SKILL.md` (**Known safe patterns**) for other accepted patterns (webhook verification, GraphQL Armor, etc.).
 
-**Security triage skills:** `.agents/skills/security-investigate-issue/SKILL.md` (internal findings), `.agents/skills/security-investigate-report/SKILL.md` (incoming reports). Both use the same artifact layout (`issue.md`, optional `plan.md` / `impact.md`, PoC) and reference the cheat sheets above during analysis.
+**Security triage skills:** `.agents/skills/security-investigate-issue/SKILL.md` (internal findings), `.agents/skills/security-investigate-report/SKILL.md` (incoming reports), shared workflow in `.agents/skills/security-investigate/_shared.md`. Both reference the cheat sheets above during analysis.
 
 ## Documentation
 

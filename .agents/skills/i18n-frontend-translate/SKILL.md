@@ -43,6 +43,12 @@ description: Batches translation of opencollective-frontend locale JSON using sh
 
 5. **Sanity check**: Optionally re-run show-untranslated for that locale; remaining lines should be actual translation work, or items intentionally listed under `IGNORED`.
 
+6. **Update progress**: After finishing (or when the user stops), refresh locale completion percentages in `lib/constants/locales.js`:
+
+   ```bash
+   cd opencollective-frontend && npm run langs:update-progress
+   ```
+
 ## Intentionally identical strings (`IGNORED`)
 
 The script compares full English message values. When a value is correctly left as English for that locale, register it under `IGNORED` in `opencollective-frontend/scripts/i18n/show-untranslated.ts` (per-locale arrays of exact strings). Otherwise the loop never clears.
@@ -73,9 +79,10 @@ Use when the English line alone is ambiguous (button vs heading, legal vs casual
 
 ## Scripts reference
 
-| Script                              | Role                                                                                 |
-| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| Script / npm script                 | Role                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `scripts/i18n/show-untranslated.ts` | Lists `{id}: english` where locale value still equals English, minus per-locale `IGNORED` exact strings. Optional `--limit N`. |
-| `scripts/i18n/set-translation.ts`   | Writes one key: `set-translation.ts <locale> <id> "text"`                            |
+| `scripts/i18n/set-translation.ts`   | Writes one key: `set-translation.ts <locale> <id> "text"`                                                                      |
+| `npm run langs:update-progress`     | Recomputes per-locale completion % and writes `lib/constants/locales.js`. Run once when done.                                  |
 
-Both are invoked with `npx tsx` from `opencollective-frontend/`.
+Show-untranslated and set-translation are invoked with `npx tsx` from `opencollective-frontend/`.

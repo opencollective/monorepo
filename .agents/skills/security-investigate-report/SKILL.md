@@ -1,146 +1,64 @@
 ---
 name: security-investigate-report
-description: Triages an incoming security report for Open Collective codebases - validates reproducibility and impact, maps to official bounty policy, proposes fixes, and drafts contributor replies. Writes artifacts under `/workspace/priv/security-issues/<unique-folder>/` including up to three core markdown files (`reply.md`, optional `issue.md` when fully confirmed, optional `plan.md` when there is a fix to plan), optional `impact.md` with production evaluation queries when forensic traces exist, plus a minimal runnable PoC for full confirmation. Use when the user pastes or describes a security report, asks to investigate a vulnerability, assess bounty eligibility, or draft a response to security@opencollective.com reporters.
+description: Triages an incoming security report for Open Collective codebases - searches opencollective/opencollective-security first for existing documentation, validates reproducibility and impact when new, maps to official bounty policy, proposes fixes, and drafts contributor replies. Writes artifacts under `/workspace/priv/security-issues/<unique-folder>/` including up to three core markdown files (`reply.md`, optional `issue.md` when fully confirmed, optional `plan.md` when there is a fix to plan), optional `impact.md` with production evaluation queries when forensic traces exist, plus a minimal runnable PoC for full confirmation. After triage, offers to file new findings on opencollective/opencollective-security. Use when the user pastes or describes a security report, asks to investigate a vulnerability, assess bounty eligibility, or draft a response to security@opencollective.com reporters.
 ---
 
 # Security report investigation (Open Collective)
 
-Canonical policy: [SECURITY.md](https://github.com/opencollective/opencollective/blob/main/SECURITY.md). Use it for eligibility, scope, qualifying vs non-qualifying issues, rewards table, and contact rules. This skill does not replace human sign-off on bounties or payouts.
+Canonical policy: [SECURITY.md](https://github.com/opencollective/opencollective/blob/main/SECURITY.md) (eligibility, scope, qualifying/non-qualifying, rewards, contact). This skill does not replace human sign-off on bounties or payouts.
 
-## Issue folder (required first step)
-
-Create a **new unique directory** for this triage under the workspace:
-
-`/workspace/priv/security-issues/<unique-folder>/`
-
-Use a name that is unique and sortable, for example `YYYY-MM-DD-<kebab-case-short-slug>` (e.g. `2026-04-20-expense-idor-preview`). If that path already exists, append a suffix (`-2`, `-3`, …) until unused. **All** skill outputs for this run (markdown files, PoC code, logs) go inside this folder only.
+**Shared triage steps:** Read [../security-investigate/_shared.md](../security-investigate/_shared.md) for issue folder rules, **known issue check** (GitHub MCP search of opencollective-security), core workflow (parse → PoC → classify → severity → fix → impact), and `impact.md` / `plan.md` structure.
 
 ## Report ID (when provided)
 
-Sometimes the user or the original thread already includes a **security report ID** (ticket reference, email subject id, internal code, etc.). **Capture it at the start** of triage and reuse it consistently:
+Capture any **security report ID** (ticket, email subject id, internal code) at the start. Do not invent one.
 
-- **`reply.md`:** If the finding is **eligible for a bounty** (or you discuss payment / expense submission), **include the actual report ID** in the email body (e.g. next to expense instructions). If no ID was ever provided, use the placeholder **`__SECURITY_REPORT_ID__`** and note that the reporter must replace it per team process.
-- **`issue.md`:** When you write an internal GitHub issue for a **fully confirmed** finding, **include the same report ID** in the body (e.g. a **Report ID:** line near the top) so internal tracking links to the original report. If no ID exists, write that none was supplied or use `__SECURITY_REPORT_ID__` if the team will assign one later. The issue title should not be the PR/commit title, but a concise description of the finding.
+- **`reply.md` / expense instructions:** Use the real ID when bounty or payment is discussed; otherwise **`__SECURITY_REPORT_ID__`** (reporter replaces per team process).
+- **`issue.md`:** **Report ID:** line near the top when fully confirmed. Title = concise finding description, not a PR/commit title.
 
-Do not invent an ID; only use what was given or the agreed placeholder.
+## Known issue match (report-specific)
 
-## Workflow
+When **_shared.md** finds a match: **`reply.md` only**. Cite existing issue URL/number and status. Note duplicates are generally not eligible for a separate bounty per SECURITY.md; **do not promise payment**. Do **not** offer to file a new opencollective-security issue.
 
-**Prerequisite:** Create the issue directory under `/workspace/priv/security-issues/` per **Issue folder** before adding PoC code or markdown files.
+## Full triage workflow
 
-1. **Parse the report** - Affected service (API, frontend, PDF, REST, images), endpoints or files, prerequisites (auth role, tenant), steps to reproduce, claimed impact, any PoC. **Note any report ID** already provided (see **Report ID**). Cross-check the claim against the matching cheat sheet(s) in **OWASP Cheat Sheet Series** (start with [Secure Code Review](https://cheatsheetseries.owasp.org/cheatsheets/Secure_Code_Review_Cheat_Sheet.html) for analysis framing).
-2. **Reproduce or disprove** - Prefer local or staging per policy (production testing on `https://opencollective.com` is out of scope for acceptance). Trace code paths in the relevant repo; confirm or refute the claim with evidence (request/response, code citation, test).
-3. **Full confirmation requires a minimal PoC** - Do **not** treat an issue as **fully confirmed** until you **implement** a **minimal** proof-of-concept in the issue folder (e.g. `poc/` subdirectory, or `poc.ts` / `poc.js` / `poc.sh` as appropriate) and **run** it successfully against a permitted environment (local dev stack, test suite, or staging per SECURITY.md). The PoC must demonstrate the security-relevant behavior (not a full exploit chain unless necessary). Record how to run it in a short `README.md` inside the issue folder or at the top of the PoC file, and capture key command output (or test pass/fail) in `issue.md` and/or `reply.md` as evidence. If a runnable PoC is **not** feasible (missing secrets, environment unavailable, legal/safety constraints, or only reproducible on production), state **not fully confirmed** or **provisional** with reasons; do **not** use **Confirmed** / write `issue.md` as a confirmed finding in that case.
-4. **Classify** - Valid issue vs invalid vs intentional/won't fix vs duplicate. Note alignment with **Qualifying** and **Non-qualifying** lists in SECURITY.md. Reserve **fully confirmed** for cases that passed the PoC bar in step 3 (or document why confirmation is impossible).
-5. **Severity** - Worst realistic exploitation; use CVSS3-style reasoning. SECURITY.md lists OC-specific amplifiers: auth, payment methods or connected accounts, ledger integrity/history, permission system.
-6. **Fix plan** - Minimal, ordered steps: where to patch, tests to add, schema or migration impacts if any, rollout or backport notes. Match existing patterns in the touched repo. Capture the full plan in `plan.md` when applicable (see **Output files**).
-7. **Contributor reply** - Tone professional, thanks the reporter, states outcome clearly. See templates below. Capture the full paste-ready text in `reply.md`. If bounty or expense is discussed, apply **Report ID** (real ID or placeholder).
-8. **Policy compliance** (only if issue is **fully confirmed** and bounty may apply) - Walk through **Eligibility and Responsible Disclosure** and **Scope** in SECURITY.md. Flag gaps (e.g. missing required sentence in original email, production-only testing, unvalidated scanner output, hypothetical without PoC). State whether bounty is **recommended**, **not eligible**, or **needs more info**; do not promise payment.
-9. **Bounty recommendation** - If eligible, map to **Rewards** table by project type and suggest Low / Medium / High / Critical with dollar range from policy. Mention sanctions / payment-processor limitations from SECURITY.md if relevant. For payment instructions, tell the reporter to submit an expense at `https://opencollective.com/ofitech/expenses/new` and include the **report ID** in the expense description: use the **actual ID** if one was provided at the start; otherwise **`__SECURITY_REPORT_ID__`** (reporter or team replaces placeholder). See **Report ID**.
-10. **Internal issue draft** - If the finding is **fully confirmed** (step 3), write `issue.md` with GitHub issue body content for internal tracking (see **Output files** and **Report ID**).
-11. **Production impact evaluation (optional)** - If durable traces exist (DB rows, auditable relationships, log fingerprints), write `impact.md` with **specific read-only queries or log filters** operators can use in production to assess in-the-wild exploitation (see **`impact.md` (optional)** under **Output files**). Skip when there is nothing actionable to query.
+**Prerequisite:** Known issue check passed. Create issue folder, then:
 
-## Output files (three core markdown files, optional `impact.md`, plus PoC artifacts)
+1. **Steps 1–7** from **_shared.md** (parse through optional `impact.md`). For classify (step 4), also check SECURITY.md Qualifying / Non-qualifying lists.
+2. **Contributor reply** - Professional, paste-ready **`reply.md`** (templates below). Apply **Report ID** when bounty/expense applies.
+3. **Policy compliance** (fully confirmed + possible bounty) - Walk SECURITY.md Eligibility, Responsible Disclosure, and Scope. Flag gaps (missing policy sentence, production-only testing, scanner-only, hypothetical without PoC). Verdict: **recommended** / **not eligible** / **needs more info**. **Do not promise payment.**
+4. **Bounty recommendation** - If eligible, map to Rewards table (project type, Low/Medium/High/Critical band). Note sanctions/payment-processor limits if relevant. Expense: `https://opencollective.com/ofitech/expenses/new` with report ID (see **Report ID**).
+5. **`issue.md`** - Only when **fully confirmed** (PoC run). GitHub body for opencollective-security: report ID, title suggestion, summary, impact, components, code refs, PoC path/run instructions, severity, label hints. Engineering handoff, not a copy of the email.
+6. **Offer GitHub issue** - After in-chat summary (see below).
 
-Write **only** under the issue directory created in **Issue folder**:
+## Output files
 
-`/workspace/priv/security-issues/<unique-folder>/`
+All under `/workspace/priv/security-issues/<unique-folder>/`. PoC in `poc/` or `poc.*`; required for **fully confirmed**. Skip files that do not apply.
 
-Use the exact markdown basenames below. **PoC code** (scripts, small test file, `curl` recipe, etc.) lives in the same directory, typically under `poc/` or as `poc.*` at the root of that folder; it is required for **full confirmation** (see workflow step 3), not optional when you claim confirmed.
+| File        | When                                                                                    | Contents                                                                                                                                                                      |
+| ----------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reply.md`  | **Always**                                                                              | Paste-ready researcher reply: verdict, thanks, bounty/expense when applicable (see **Report ID**). State provisional clearly if PoC not run.                                  |
+| `issue.md`  | **Fully confirmed only**                                                                | opencollective-security issue body (see workflow step 5).                                                                                                                     |
+| `plan.md`   | **Fix to plan**                                                                         | Per **_shared.md**.                                                                                                                                                           |
+| `impact.md` | **Queryable exploitation traces** (often with `issue.md`; sometimes provisional ops need) | Per **_shared.md**.                                                                                                                                                           |
 
-| File        | When                                                                                                                                                              | Contents                                                                                                                                                                                                                                                                                                                                                           |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `reply.md`  | **Always**                                                                                                                                                        | Full text of the reply for the researcher (same substance as the former "Draft email" section: professional tone, verdict, thanks, bounty/expense wording when applicable). Paste-ready. If not fully confirmed, say so clearly (e.g. provisional, could not run PoC). **If bounty-related:** include the **report ID** when one was provided (see **Report ID**). |
-| `issue.md`  | **If the issue is fully confirmed** (minimal PoC implemented and run successfully in step 3)                                                                      | Body text for a GitHub issue on your internal repo: **report ID** (if any), title suggestion, summary, impact, affected components, references to code, **pointer to PoC path and how it was run**, severity, labels/hints if useful. No duplicate of the full email; focus on documentation and engineering handoff.                                              |
-| `plan.md`   | **When there is a fix to plan** (typically fully confirmed issues; omit for clear invalid/duplicate/out-of-scope with nothing to build)                           | Ordered fix plan: where to patch, tests, migrations/schema, rollout, owner notes. Match the **Fix plan** workflow step.                                                                                                                                                                                                                                            |
-| `impact.md` | **When exploitation would leave queryable traces** (often when `issue.md` exists, but also for high-confidence provisional findings if operators need indicators) | **Production evaluation queries:** read-only checks an operator can run against production data (or production-equivalent read replicas) to assess **whether the issue was exploited in the wild**. Omit when there is nothing concrete to query (e.g. no durable audit trail, purely client-side issue, or only hypothetical abuse with no DB or log signature).  |
+## Reply templates (adapt; keep accurate and kind)
 
-If a markdown file does not apply, skip it. Do not create empty placeholder files.
+**Known issue / duplicate** - Thanks; known issue + GitHub link/number/status; duplicates generally not eligible for separate bounty; invite follow-up if they believe it is a distinct flaw; optional report ID for correlation.
 
-### `impact.md` (optional)
+**Invalid / non-issue** - Thanks; conclusion (cannot reproduce, not a defect, out of scope, Non-qualifying with brief rationale); point to staging/docs if helpful; no bounty unless a separate valid finding.
 
-Create **`impact.md`** when triage can name **specific, reproducible data patterns** that would indicate abuse (table/column changes, suspicious rows, correlation across tenants, request logs with fingerprints, etc.). Tie queries to the **actual code path and schema** you traced (Sequelize models, not migrations; see `AGENTS.md`).
+**Fully confirmed** - Thanks; validated via minimal PoC in permitted environment (minimal exploit detail if undisclosed); next steps; if eligibility appears met, bounty tier/band per SECURITY.md and note any uncertainty (first reporter, 72h rule, etc.); expense URL + **Report ID**.
 
-**Include in `impact.md`:**
+## GitHub issue (optional)
 
-1. **Purpose** - What "exploited" means in observable terms for this finding (one short paragraph).
-2. **Assumptions** - Which tables/entities, time window (e.g. since first vulnerable deploy if known), and limits of detection (false positives, missed edge cases).
-3. **Queries** - Numbered list of **specific** queries. Prefer PostgreSQL `SELECT` (and safe read-only aggregations). One query per step or question; include identifiers/joins the operator needs (e.g. `CollectiveId`, `UserId`, expense/vendor/payout IDs as applicable). If a check needs application or log search instead of SQL, say the source (e.g. CloudWatch, Sentry, webhook logs) and give **exact** filter strings or fields where possible.
-4. **How to interpret** - What rows or counts would support vs undermine an exploitation hypothesis.
-5. **Safety and policy** - Note that production access follows internal ops policy; queries should be **read-only**; recommend review with someone who can run production DB or log queries; never paste real production secrets or credentials into the issue folder.
+After in-chat summary, **offer** to create on **`opencollective/opencollective-security`**. Do not create without user acceptance. Do not use browser automation.
 
-Do **not** put `impact.md` content that belongs in `issue.md` (product/engineering summary); keep `impact.md` narrowly focused on **post-triage forensic evaluation**.
+- **Offer when:** Fully confirmed + `issue.md` (primary); provisional/invalid only if user may want a record.
+- **On accept:** GitHub MCP available; read schema (`issue_write` create, etc.). Title/body from `issue.md` when present; no secrets or raw exploit steps if undisclosed. Use existing labels only. Return issue URL or leave `issue.md` for manual paste at [New issue](https://github.com/opencollective/opencollective-security/issues/new).
 
-## Contributor reply templates
+## In-chat summary
 
-Adapt wording; keep accurate and kind.
+**Duplicate path:** (1) Verdict + existing issue link (2) Search queries and why same finding (3) Folder path + `reply.md`.
 
-**Invalid / non-issue / duplicate**
-
-- Thank them; briefly state conclusion (cannot reproduce, not a security defect, duplicate of internal tracking, out of scope per SECURITY.md, or matches a **Non-qualifying** category with short rationale).
-- If helpful, point to docs or safe alternatives (e.g. use staging URLs from SECURITY.md for future tests).
-- No bounty language unless you are also acknowledging a separate valid finding.
-
-**Fully confirmed issue** (only after minimal PoC implemented and run per workflow step 3)
-
-- Thank them; confirm validation with a minimal PoC you ran in a permitted environment (avoid exploit details in email if still undisclosed).
-- Summarize next steps (fix in progress, timeline if known, invitation to verify after patch).
-- **Policy check** - If all eligibility rules appear met, state that the report is eligible for consideration under the bounty program per SECURITY.md and give the **suggested severity tier and reward band** from the table. If something is uncertain (first reporter, 72-hour rule, AI-generated report review), say what you still need verified.
-- **Expense** - Include: submit expense at `https://opencollective.com/ofitech/expenses/new` with the **report ID** in the expense description (use the **real ID** if the triage started with one; otherwise **`__SECURITY_REPORT_ID__`**) or as instructed by the team.
-
-## Quick reference from SECURITY.md
-
-- **Required for reports** - Clear description, repro steps, PoC when needed; message must include: `I have read and accepted the Security Policy of Open Collective.` Non-compliant reports may be ignored.
-- **Scope** - No bounty acceptance for testing done on production `https://opencollective.com`; prefer local repos; staging hosts listed in SECURITY.md.
-- **Qualifying** - Includes RCE, LFI/RFI/XXE/SSRF/XSPA, injections, XSS, CSRF with real impact, open redirect, auth/session flaws, IDOR, impactful CORS, privilege escalation, SQLi (see full list in SECURITY.md).
-- **Non-qualifying** - Includes many scanner-only findings, pure information disclosure, missing headers without direct vuln, hypothetical without PoC, rate limits, DoS, etc. (see full list in SECURITY.md).
-
-## Severity classification
-
-- CVSS3 score >= 9: severity high
-- CVSS3 score >= 8: severity medium
-- CVSS3 score >= 7: severity low
-
-## OWASP Cheat Sheet Series
-
-Use the [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org) while triaging. Pick the cheat sheet that matches the **affected service and vulnerability class** (do not rely on the index page alone).
-
-| Affected area                       | Cheat sheet                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Any triage (analysis framework)     | [Secure Code Review](https://cheatsheetseries.owasp.org/cheatsheets/Secure_Code_Review_Cheat_Sheet.html) - threat modeling, trust boundaries, data flow; **does not replace** this skill's outputs (`reply.md`, optional `issue.md` / `plan.md` / `impact.md`, PoC)                                                                                          |
-| APIs / GraphQL                      | [GraphQL](https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html)                                                                                                                                                                                                                                                                           |
-| opencollective-rest                 | [REST Security](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)                                                                                                                                                                                                                                                               |
-| OAuth apps, personal tokens, scopes | [OAuth2](https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html)                                                                                                                                                                                                                                                                             |
-| Sessions, login, JWT / Passport     | [Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)                                                                                                                                                   |
-| Permissions, IDOR, private accounts | [Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html), [Access Control](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html), [Insecure Direct Object Reference Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html) |
-| SQL / PostgreSQL                    | [SQL Injection Prevention](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)                                                                                                                                                                                                                                         |
-| opencollective-frontend             | [Cross Site Scripting Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html), [Cross-Site Request Forgery Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)                                                                           |
-| File uploads (images service)       | [File Upload](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)                                                                                                                                                                                                                                                                   |
-| SSRF, webhooks, outbound HTTP       | [Server Side Request Forgery Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)                                                                                                                                                                                                             |
-| Payments, expenses, ledger logic    | [Business Logic Security](https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html), [Third Party Payment Gateway Integration](https://cheatsheetseries.owasp.org/cheatsheets/Third_Party_Payment_Gateway_Integration_Cheat_Sheet.html)                                                                                       |
-| 2FA-gated actions                   | [Multifactor Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html)                                                                                                                                                                                                                                     |
-| Node.js / Express (API-side repos)  | [Nodejs Security](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html)                                                                                                                                                                                                                                                           |
-
-**Context7 MCP:** If the `user-context7` MCP server is available, load cheat sheet content from library ID `/owasp/cheatsheetseries` instead of browsing the site (same source material).
-
-## Internal workspace context
-
-`AGENTS.md` documents intentional security postures (e.g. public GraphQL introspection, permissive API CORS). Do not treat those as vulnerabilities when triaging.
-
-Security audit findings under `priv/security-audit/` must **not** be committed (per `AGENTS.md`). Triage outputs under `/workspace/priv/security-issues/` (issue folders, PoC code, replies) are similarly sensitive; do not commit unless the user explicitly wants them versioned. This skill is for **incoming contributor reports**, not for publishing audit files.
-
-## Output structure for the user
-
-**Issue directory:** Full path to `/workspace/priv/security-issues/<unique-folder>/` (the folder created for this run).
-
-**Files:** Produce `reply.md`, and when applicable `issue.md`, `plan.md`, and `impact.md`, per **Output files** above; plus PoC artifacts in that same directory when confirming.
-
-**In-chat summary** (brief; full detail lives in the markdown files where relevant):
-
-1. **Verdict** - Valid / Invalid / Unclear / Duplicate / Provisional (not fully confirmed) (with reason).
-2. **Evidence** - What was checked (code, local/staging repro, logs). If fully confirmed: PoC path, command run, and outcome.
-3. **Impact** - Who is affected, confidentiality / integrity / availability, OC-specific sensitivities (payments, ledger, permissions).
-4. **Suggested severity** - Low / Medium / High / Critical with short justification.
-5. **Fix plan** - Pointer or bullets; full steps go in `plan.md` when that file is created.
-6. **Bounty** - Eligible or not; if eligible, project row and amount band; compliance notes; expense URL; **report ID** used or note that none was provided.
-7. **Paths** - Full path to the issue folder; which of `reply.md` / `issue.md` / `plan.md` / `impact.md` were written; where PoC lives (if any).
+**Full triage path:** (1) Duplicate check note (2) Verdict + reason (3) Evidence + PoC if confirmed (4) Impact (5) Severity (6) Fix plan pointer (7) Bounty eligibility/band/compliance + report ID (8) Folder path + files written + PoC path (9) Offer opencollective-security issue.

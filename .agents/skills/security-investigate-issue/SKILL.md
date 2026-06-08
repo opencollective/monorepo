@@ -5,107 +5,38 @@ description: Triages an internally reported security concern for Open Collective
 
 # Security issue investigation - internal (Open Collective)
 
-Triages findings raised inside the org (engineering, ops, security). Scope is assertion, evidence, optional fix plan, and optional production-impact queries.
+Triages findings raised inside the org (engineering, ops, security): assertion, evidence, optional fix plan, optional production-impact queries. No external reply or bounty workflow.
 
-## Issue folder (required first step)
-
-Create a **new unique directory** for this triage under the workspace:
-
-`/workspace/priv/security-issues/<unique-folder>/`
-
-Use a name that is unique and sortable, for example `YYYY-MM-DD-<kebab-case-short-slug>` (e.g. `2026-04-22-internal-expense-idor-preview`). If that path already exists, append a suffix (`-2`, `-3`, …) until unused. **All** skill outputs for this run (markdown files, PoC code, logs) go inside this folder only.
-
-## Internal reference ID (optional)
-
-If the user provides an **internal ticket ID** (Linear, Jira, GitHub security discussion, incident number, etc.), capture it at the start and repeat it in **`issue.md`** (e.g. a **Reference:** line near the top). Do not invent an ID.
+**Shared triage steps:** Read [../security-investigate/_shared.md](../security-investigate/_shared.md) for issue folder rules, **known issue check** (GitHub MCP search of opencollective-security), core workflow (parse → PoC → classify → severity → fix → impact), and `impact.md` / `plan.md` structure.
 
 ## Workflow
 
-**Prerequisite:** Create the issue directory under `/workspace/priv/security-issues/` per **Issue folder** before adding PoC code or markdown files.
+**Prerequisite:** Run **_shared.md** **Known issue check** first. On match: **`issue.md` only** (verdict **Duplicate**, link to existing issue). On no match: create issue folder, then **_shared.md** steps 1–7.
 
-1. **Parse the report** - Affected service (API, frontend, PDF, REST, images), endpoints or files, prerequisites (auth role, tenant), steps to reproduce, claimed impact, any PoC. **Note any internal reference ID** (see **Internal reference ID**). Cross-check the claim against the matching cheat sheet(s) in **OWASP Cheat Sheet Series** (start with [Secure Code Review](https://cheatsheetseries.owasp.org/cheatsheets/Secure_Code_Review_Cheat_Sheet.html) for analysis framing).
-2. **Reproduce or disprove** - Prefer local or staging. Trace code paths in the relevant repo; confirm or refute the claim with evidence (request/response, code citation, test). Treat production-only testing on `https://opencollective.com` as **evidence of behavior**, not as a substitute for a safe repro environment when building a PoC.
-3. **Full confirmation requires a minimal PoC** - Do **not** treat an issue as **fully confirmed** until you **implement** a **minimal** proof-of-concept in the issue folder (e.g. `poc/` subdirectory, or `poc.ts` / `poc.js` / `poc.sh` as appropriate) and **run** it successfully against a permitted environment (local dev stack, test suite, or staging). The PoC must demonstrate the security-relevant behavior (not a full exploit chain unless necessary). Record how to run it in a short `README.md` inside the issue folder or at the top of the PoC file, and capture key command output (or test pass/fail) in **`issue.md`** as evidence. If a runnable PoC is **not** feasible (missing secrets, environment unavailable, or legal/safety constraints), state **not fully confirmed** or **provisional** with reasons; do **not** label the assertion **Confirmed** in that case.
-4. **Classify** - Valid issue vs invalid vs intentional/won't fix vs duplicate. Note alignment with product/security expectations and `AGENTS.md` intentional postures (e.g. public GraphQL introspection, permissive API CORS are not defects). Reserve **fully confirmed** for cases that passed the PoC bar in step 3 (or document why confirmation is impossible).
-5. **Severity** - Worst realistic exploitation; use CVSS3-style reasoning. Consider OC-specific sensitivities: auth, payment methods or connected accounts, ledger integrity/history, permission system.
-6. **Fix plan** - Minimal, ordered steps: where to patch, tests to add, schema or migration impacts if any, rollout or backport notes. Match existing patterns in the touched repo. Capture the full plan in **`plan.md`** when applicable (see **Output files**).
-7. **Optional production impact** - If durable traces exist (DB rows, auditable relationships, log fingerprints), write **`impact.md`** with read-only queries or log filters (see **`impact.md` (optional)** under **Output files**).
+## Internal reference ID (optional)
+
+If the user provides an internal ticket ID (Linear, Jira, incident number, etc.), capture at start and repeat in **`issue.md`** (**Reference:** line). Do not invent an ID.
 
 ## Output files
 
-Write **only** under the issue directory created in **Issue folder**:
+All under `/workspace/priv/security-issues/<unique-folder>/`. PoC in `poc/` or `poc.*`; required for **fully confirmed**.
 
-`/workspace/priv/security-issues/<unique-folder>/`
+| File        | When           | Contents                                                                                                                                                                                                                                                                                                                                 |
+| ----------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue.md`  | **Always**     | Assertion: reference ID (if any), title suggestion, claim summary, **verdict** (Confirmed / Provisional / Invalid / Duplicate / Intentional / Unclear) with reasoning, impact, components, code refs, PoC path/run (or why not), severity, next steps. One canonical internal write-up. |
+| `plan.md`   | **Fix to plan** | Per **_shared.md**.                                                                                                                                                                                                                                                                                                                      |
+| `impact.md` | **Queryable traces** | Per **_shared.md**.                                                                                                                                                                                                                                                                                                                      |
 
-Use the exact markdown basenames below. **PoC code** lives in the same directory, typically under `poc/` or as `poc.*` at the root of that folder; it is required for **full confirmation** (see workflow step 3), not optional when you claim confirmed.
+## In-chat summary
 
-| File        | When                                                                                                                                                             | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `issue.md`  | **Always**                                                                                                                                                       | **Assertion document:** internal reference ID (if any), title suggestion, summary of the claim, **verdict** (Confirmed / Provisional / Invalid / Duplicate / Intentional / Unclear) with reasoning, impact, affected components, code references, **pointer to PoC path and how it was run** (or why PoC was not run), suggested severity, and recommended next steps for engineering. One canonical internal write-up (no separate external reply). |
-| `plan.md`   | **When there is a fix to plan** (typically confirmed or high-confidence provisional issues; omit for clear invalid/duplicate/out-of-scope with nothing to build) | Ordered fix plan: where to patch, tests, migrations/schema, rollout, owner notes.                                                                                                                                                                                                                                                                                                                                                                    |
-| `impact.md` | **When exploitation would leave queryable traces**                                                                                                               | **Production evaluation queries:** read-only checks an operator can run to assess **whether the issue was exploited in the wild**. Follow the **`impact.md` (optional)** subsection below (purpose, assumptions, queries, interpretation, safety). Omit when there is nothing concrete to query.                                                                                                                                                     |
+**Duplicate path:** (1) Verdict Duplicate + existing issue link (2) Search summary (3) Folder path + `issue.md`.
 
-### `impact.md` (optional)
+**Full triage path:**
 
-Create **`impact.md`** when triage can name **specific, reproducible data patterns** that would indicate abuse (table/column changes, suspicious rows, correlation across tenants, request logs with fingerprints, etc.). Tie queries to the **actual code path and schema** you traced (Sequelize models, not migrations; see `AGENTS.md`).
-
-**Include in `impact.md`:**
-
-1. **Purpose** - What "exploited" means in observable terms for this finding (one short paragraph).
-2. **Assumptions** - Which tables/entities, time window, and limits of detection (false positives, missed edge cases).
-3. **Queries** - Numbered list of **specific** queries. Prefer PostgreSQL `SELECT` (and safe read-only aggregations). If a check needs application or log search instead of SQL, say the source and give **exact** filter strings or fields where possible.
-4. **How to interpret** - What rows or counts would support vs undermine an exploitation hypothesis.
-5. **Safety and policy** - Production access follows internal ops policy; queries should be **read-only**; recommend review with someone who can run production DB or log queries; never paste real production secrets or credentials into the issue folder.
-
-Do **not** duplicate the full engineering narrative from `issue.md`; keep `impact.md` narrowly focused on **post-triage forensic evaluation**.
-
-## Severity classification (quick reference)
-
-- CVSS3 score >= 9: severity high
-- CVSS3 score >= 8: severity medium
-- CVSS3 score >= 7: severity low
-
-(Use full CVSS reasoning in **`issue.md`**; these bands are a shorthand only.)
-
-## OWASP Cheat Sheet Series
-
-Use the [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org) while triaging. Pick the cheat sheet that matches the **affected service and vulnerability class** (do not rely on the index page alone).
-
-| Affected area                       | Cheat sheet                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Any triage (analysis framework)     | [Secure Code Review](https://cheatsheetseries.owasp.org/cheatsheets/Secure_Code_Review_Cheat_Sheet.html) - threat modeling, trust boundaries, data flow; **does not replace** this skill's outputs (`reply.md`, optional `issue.md` / `plan.md` / `impact.md`, PoC)                                                                                          |
-| APIs / GraphQL                      | [GraphQL](https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html)                                                                                                                                                                                                                                                                           |
-| opencollective-rest                 | [REST Security](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)                                                                                                                                                                                                                                                               |
-| OAuth apps, personal tokens, scopes | [OAuth2](https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html)                                                                                                                                                                                                                                                                             |
-| Sessions, login, JWT / Passport     | [Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)                                                                                                                                                   |
-| Permissions, IDOR, private accounts | [Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html), [Access Control](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html), [Insecure Direct Object Reference Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html) |
-| SQL / PostgreSQL                    | [SQL Injection Prevention](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)                                                                                                                                                                                                                                         |
-| opencollective-frontend             | [Cross Site Scripting Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html), [Cross-Site Request Forgery Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)                                                                           |
-| File uploads (images service)       | [File Upload](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)                                                                                                                                                                                                                                                                   |
-| SSRF, webhooks, outbound HTTP       | [Server Side Request Forgery Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)                                                                                                                                                                                                             |
-| Payments, expenses, ledger logic    | [Business Logic Security](https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html), [Third Party Payment Gateway Integration](https://cheatsheetseries.owasp.org/cheatsheets/Third_Party_Payment_Gateway_Integration_Cheat_Sheet.html)                                                                                       |
-| 2FA-gated actions                   | [Multifactor Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html)                                                                                                                                                                                                                                     |
-| Node.js / Express (API-side repos)  | [Nodejs Security](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html)                                                                                                                                                                                                                                                           |
-
-**Context7 MCP:** If the `user-context7` MCP server is available, load cheat sheet content from library ID `/owasp/cheatsheetseries` instead of browsing the site (same source material).
-
-## Internal workspace context
-
-`AGENTS.md` documents intentional security postures (e.g. public GraphQL introspection, permissive API CORS). Do not treat those as vulnerabilities when triaging.
-
-Triage outputs under `/workspace/priv/security-issues/` are sensitive; do not commit unless the user explicitly wants them versioned.
-
-## Output structure for the user
-
-**Issue directory:** Full path to `/workspace/priv/security-issues/<unique-folder>/`.
-
-**Files:** Always **`issue.md`**; when applicable **`plan.md`** and **`impact.md`**; plus PoC artifacts in that same directory when confirming.
-
-**In-chat summary** (brief; full detail lives in the markdown files):
-
-1. **Verdict** - Confirmed / Provisional / Invalid / Duplicate / Intentional / Unclear (with reason).
-2. **Evidence** - What was checked (code, local/staging repro). If confirmed: PoC path, command run, and outcome.
-3. **Impact** - Who is affected, confidentiality / integrity / availability, payment/ledger/permission sensitivities if relevant.
-4. **Suggested severity** - Low / Medium / High / Critical with short justification.
-5. **Fix plan** - Pointer or bullets; full steps in **`plan.md`** when created.
-6. **Paths** - Full path to the issue folder; which of **`issue.md`** / **`plan.md`** / **`impact.md`** were written; where PoC lives (if any).
+1. **Known issue check** - Searched; no confident match (or weak hits ruled out)
+2. **Verdict** + reason
+3. **Evidence** (+ PoC path/outcome if confirmed)
+4. **Impact**
+5. **Suggested severity**
+6. **Fix plan** pointer (`plan.md` when created)
+7. **Paths** - folder; which of `issue.md` / `plan.md` / `impact.md`; PoC location
