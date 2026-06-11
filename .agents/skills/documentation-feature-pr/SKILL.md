@@ -42,11 +42,11 @@ Do **not** scan recent repo changes unless the user explicitly asks; focus on th
 
 Work **directly** in the local documentation repo:
 
-| Item | Value |
-| ---- | ----- |
-| Path | `/workspace/opencollective-documentation` |
-| Remote | `https://github.com/opencollective/opencollective-documentation` |
-| Default branch | `main` |
+| Item           | Value                                                            |
+| -------------- | ---------------------------------------------------------------- |
+| Path           | `/workspace/opencollective-documentation`                        |
+| Remote         | `https://github.com/opencollective/opencollective-documentation` |
+| Default branch | `main`                                                           |
 
 If the directory is missing or empty, initialize the submodule or clone into that path before continuing.
 
@@ -128,7 +128,7 @@ Stay on `main` while drafting, or use a local-only working tree; **do not push**
 
 ### 5. Present draft and offer PR
 
-After edits, return a summary:
+After edits, return a **brief** summary (see **Reply style**):
 
 - Docs added/updated (file paths)
 - Which frontend codepaths they cover
