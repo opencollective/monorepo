@@ -64,6 +64,7 @@
 
   // Use 'workspaceFolder' to specify the working directory for your container.
   "workspaceFolder": "/workspace",
+  "postStartCommand": "grep -qF 'shell-aliases.sh' ~/.bashrc || echo 'source /workspace/.devcontainer/shell-aliases.sh' >> ~/.bashrc",
   "postCreateCommand": {
     "cypressDependencies": "sudo apt update && sudo apt install -y --no-install-recommends libgtk-3-0 libgbm-dev libnotify-dev libnss3 libxss1 libasound2 libxtst6 xauth xvfb",
     "installFrontendDependencies": "cd opencollective-frontend && npm install",

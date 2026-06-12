@@ -51,7 +51,7 @@ VS Code will start with PostgreSQL, Mailpit, and other services running automati
 Run the start script to launch the frontend and API:
 
 ```bash
-./scripts/run.sh
+run
 ```
 
 **Access the app:**
@@ -63,9 +63,9 @@ Run the start script to launch the frontend and API:
 **Start specific services:**
 
 ```bash
-./scripts/run.sh frontend           # Frontend only
-./scripts/run.sh frontend api       # Frontend and API
-./scripts/run.sh frontend:staging   # Frontend connected to staging
+run frontend           # Frontend only
+run frontend api       # Frontend and API
+run frontend:staging   # Frontend connected to staging
 ```
 
 ---
@@ -76,13 +76,17 @@ Use the unified test script to run tests across any project:
 
 ```bash
 # Run a specific test file
-./scripts/test.sh opencollective-frontend/components/MyComponent.test.tsx
+test opencollective-frontend/components/MyComponent.test.tsx
 
 # Run tests in watch mode
-./scripts/test.sh --watch opencollective-api/test/server/lib/mylib.test.ts
+test --watch opencollective-api/test/server/lib/mylib.test.ts
 ```
 
 The script automatically detects the project (frontend, api, pdf, rest) and runs the appropriate test command.
+
+## Shell shortcuts
+
+In the devcontainer, `run` and `test` aliases are set up automatically. Outside the devcontainer, use `./scripts/run.sh` and `./scripts/test.sh`. If you get `run: command not found`, restart the devcontainer.
 
 ---
 
