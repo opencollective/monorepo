@@ -177,6 +177,27 @@ Beyond that:
 - The body may also briefly **summarize what changed in the code** when that helps reviewers and future readers.
 - When generating texts, avoid using "—" (em dash) and use "-" (hyphen) instead.
 
+### Code quality checks
+
+**Always** run TypeScript checking, ESLint, and Prettier on your changes before considering work complete. Run commands from the relevant subfolder (each repo is independent).
+
+1. **TypeScript** - `npm run type:check` (skip only in repos that do not define this script, e.g. `opencollective-images`)
+2. **ESLint** - `npm run lint` or `npm run lint:check` / `npm run lint:quiet` (use the check/quiet variant when available)
+3. **Prettier** - `npm run prettier:check`; if it fails, run `npm run prettier:write` (or `npm run prettier` in `opencollective-pdf`) and re-check
+
+Fix all reported issues. These checks mirror CI and must pass before you hand off the change.
+
+| Repository | TypeScript | ESLint | Prettier check | Prettier fix |
+| ---------- | ---------- | ------ | -------------- | ------------ |
+| opencollective-api | `npm run type:check` | `npm run lint:check` | `npm run prettier:check` | `npm run prettier:write` |
+| opencollective-frontend | `npm run type:check` | `npm run lint` | `npm run prettier:check` | `npm run prettier:write` |
+| opencollective-rest | `npm run type:check` | `npm run lint` | `npm run prettier:check` | `npm run prettier:write` |
+| opencollective-pdf | `npm run type:check` | `npm run lint` | `npm run prettier:check` | `npm run prettier` |
+| opencollective-taxes | `npm run type:check` | `npm run lint:check` | `npm run prettier:check` | `npm run prettier:write` |
+| opencollective-images | - | `npm run lint` | `npm run prettier:check` | `npm run prettier:write` |
+
+When you touch files in multiple repos, run the checks in each affected repo.
+
 ### Running Tests
 
 Use `./scripts/test.sh` to run tests for any file across projects:

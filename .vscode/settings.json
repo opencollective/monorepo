@@ -20,6 +20,13 @@
     "opencollective-watch/": true,
     "test/": true,
     ".git-backup/": true
+    // "opencollective-documentation/*": true,
+    // "opencollective-images": true,
+    // "opencollective-pdf": true,
+    // "opencollective-rss": true,
+    // "opencollective-studies": true,
+    // "opencollective-taxes": true,
+    // "opencollective-rest": true
   },
   "search.useIgnoreFiles": false,
   "search.useParentIgnoreFiles": false,
@@ -35,5 +42,6 @@
     "**/tsconfig.tsbuildinfo": true,
     "opencollective/.github/aw/logs/": true,
     "**/.nyc_output/": true
-  }
+  },
+  "eslint.runtime": "node"
 }

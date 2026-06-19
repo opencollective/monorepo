@@ -25,3 +25,7 @@
 [submodule "opencollective-taxes"]
 	path = opencollective-taxes
 	url = git@github.com:opencollective/opencollective-taxes.git
+[submodule "opencollective-rss"]
+	path = opencollective-rss
+	url = git@github.com:opencollective/opencollective-rss
+
