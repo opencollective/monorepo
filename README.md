@@ -36,6 +36,14 @@ cd opencollective
 
 This clones all Open Collective projects into a single workspace.
 
+To clone only the projects you need (faster setup, less disk use):
+
+```bash
+./scripts/init.sh --projects api,frontend,documentation
+```
+
+Use short names (`api`, `frontend`, `documentation`, …) or full directory names (`opencollective-api`). Combine with `--shallow` for smaller clones. Run `./scripts/init.sh --help` for the full list of projects.
+
 ### 2. Open in VS Code with DevContainer (Recommended)
 
 DevContainers give you a fully configured development environment with all dependencies ready to go.

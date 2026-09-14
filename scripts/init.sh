@@ -34,6 +34,30 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Short name for a submodule path (e.g. opencollective-api -> api)
+project_short_name() {
+    local path="$1"
+    if [[ "$path" == opencollective-* ]]; then
+        echo "${path#opencollective-}"
+    else
+        echo "$path"
+    fi
+}
+
+# Resolve a user-provided project id to a submodule path, or return empty if unknown
+resolve_project() {
+    local input="${1,,}" # lowercase
+    local -a paths=("${ALL_PROJECT_PATHS[@]}")
+    local path short
+    for path in "${paths[@]}"; do
+        if [ "$input" = "$path" ] || [ "$input" = "$(project_short_name "$path")" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Function to clone a repository
 clone_repo() {
     local repo_url="$1"
@@ -64,18 +88,29 @@ clone_repo() {
 main() {
     # Parse command line arguments
     SHALLOW_CLONE="false"
+    PROJECTS_FILTER=""
     while [[ $# -gt 0 ]]; do
         case $1 in
             --shallow)
                 SHALLOW_CLONE="true"
                 shift
                 ;;
+            --projects)
+                if [ -z "${2:-}" ]; then
+                    print_error "--projects requires a comma-separated list of projects"
+                    exit 1
+                fi
+                PROJECTS_FILTER="$2"
+                shift 2
+                ;;
             -h|--help)
-                echo "Usage: $0 [--shallow]"
+                echo "Usage: $0 [--shallow] [--projects PROJECTS]"
                 echo ""
                 echo "Options:"
-                echo "  --shallow    Use shallow cloning (--depth 1 --single-branch) for faster, smaller clones"
-                echo "  -h, --help   Show this help message"
+                echo "  --shallow              Use shallow cloning (--depth 1 --single-branch) for faster, smaller clones"
+                echo "  --projects PROJECTS    Comma-separated list of projects to clone (default: all)"
+                echo "                         Use short names (api, frontend) or full directory names (opencollective-api)"
+                echo "  -h, --help             Show this help message"
                 exit 0
                 ;;
             *)
@@ -111,6 +146,69 @@ main() {
     
     if [ "${#repositories[@]}" -eq 0 ]; then
         print_error "No submodules found in $GITMODULES"
+        exit 1
+    fi
+
+    local -a ALL_PROJECT_PATHS=()
+    for ((i=1; i<${#repositories[@]}; i+=2)); do
+        ALL_PROJECT_PATHS+=("${repositories[i]}")
+    done
+
+    local -a selected_paths=()
+    if [ -n "$PROJECTS_FILTER" ]; then
+        local IFS=',' project resolved unknown=()
+        for project in $PROJECTS_FILTER; do
+            project="${project#"${project%%[![:space:]]*}"}"
+            project="${project%"${project##*[![:space:]]}"}"
+            [ -z "$project" ] && continue
+            if resolved=$(resolve_project "$project"); then
+                selected_paths+=("$resolved")
+            else
+                unknown+=("$project")
+            fi
+        done
+        if [ "${#unknown[@]}" -gt 0 ]; then
+            print_error "Unknown project(s): ${unknown[*]}"
+            echo ""
+            echo "Available projects (short or directory name):"
+            local path
+            for path in "${ALL_PROJECT_PATHS[@]}"; do
+                echo "  - $(project_short_name "$path") ($path)"
+            done
+            exit 1
+        fi
+        if [ "${#selected_paths[@]}" -eq 0 ]; then
+            print_error "No projects selected. Use --projects with a comma-separated list."
+            exit 1
+        fi
+        # Deduplicate while preserving order
+        local -a deduped=()
+        local path seen
+        for path in "${selected_paths[@]}"; do
+            seen=false
+            for existing in "${deduped[@]}"; do
+                [ "$existing" = "$path" ] && seen=true && break
+            done
+            [ "$seen" = false ] && deduped+=("$path")
+        done
+        selected_paths=("${deduped[@]}")
+
+        local -a filtered=()
+        for ((i=0; i<${#repositories[@]}; i+=2)); do
+            local repo_url="${repositories[i]}"
+            local repo_name="${repositories[i+1]}"
+            local include=false
+            for path in "${selected_paths[@]}"; do
+                [ "$path" = "$repo_name" ] && include=true && break
+            done
+            [ "$include" = true ] && filtered+=("$repo_url" "$repo_name")
+        done
+        repositories=("${filtered[@]}")
+        print_status "Cloning selected projects only: ${selected_paths[*]}"
+    fi
+
+    if [ "${#repositories[@]}" -eq 0 ]; then
+        print_error "No repositories to clone"
         exit 1
     fi
     
