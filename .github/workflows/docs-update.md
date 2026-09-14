@@ -20,7 +20,6 @@ checkout:
   - repository: opencollective/documentation
     path: ./opencollective-documentation
     current: true
-    github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
   - repository: opencollective/opencollective-frontend
     path: ./opencollective-frontend
   - repository: opencollective/opencollective-api
@@ -81,7 +80,7 @@ steps:
 safe-outputs:
   github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
   create-pull-request:
-    title-prefix: '[docs] '
+    title-prefix: "[docs] "
     target-repo: opencollective/documentation
     reviewers: [znarf]
     draft: false
@@ -206,11 +205,11 @@ Read those files first. Do not spend the run re-listing commits unless a file is
 
 Workspace checkouts (relative paths, not `/workspace/...`):
 
-| Path | GitHub repo | Role |
-| --- | --- | --- |
-| `opencollective-documentation/` | `opencollective/documentation` | Edit target (GitBook markdown) |
-| `opencollective-frontend/` | `opencollective/opencollective-frontend` | Verify user-facing behavior |
-| `opencollective-api/` | `opencollective/opencollective-api` | Confirm whether a change is user-visible |
+| Path                            | GitHub repo                              | Role                                     |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------- |
+| `opencollective-documentation/` | `opencollective/documentation`           | Edit target (GitBook markdown)           |
+| `opencollective-frontend/`      | `opencollective/opencollective-frontend` | Verify user-facing behavior              |
+| `opencollective-api/`           | `opencollective/opencollective-api`      | Confirm whether a change is user-visible |
 
 Navigate into the documentation checkout before editing:
 
