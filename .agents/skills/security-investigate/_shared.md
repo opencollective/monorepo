@@ -66,7 +66,7 @@ Brief search summary (both local archive and GitHub), then **Core triage workflo
 
 ## `impact.md` (on user acceptance only)
 
-Write only when the user accepts the **production impact analysis** offer at the end of triage (do not create by default). Use when triage can name **specific, reproducible data patterns** indicating abuse. Tie queries to traced schema (Sequelize models, not migrations; see `AGENTS.md`). Keep forensic focus; do not duplicate the main engineering narrative.
+Write only when the user accepts the **production impact analysis** offer at the end of triage (do not create by default). Use when triage can name **specific, reproducible data patterns** indicating abuse. Tie queries to traced schema (Sequelize models, not migrations; see `opencollective-api/AGENTS.md`). Keep forensic focus; do not duplicate the main engineering narrative.
 
 1. **Purpose** - What "exploited" means in observable terms.
 2. **Assumptions** - Tables/entities, time window, detection limits.
