@@ -1,6 +1,6 @@
 ---
 name: support-ticket-reply
-description: Drafts paste-ready email replies to Open Collective support tickets by researching user-facing documentation and product behavior. Searches GitBook docs and the local documentation repo for relevant pages and includes links when helpful. Use when the user pastes a support ticket, asks to reply to a support email, draft a help desk response, or invokes /support-ticket-reply.
+description: Researches product behavior and docs to draft replies to Open Collective support tickets. Use when asked to answer a support ticket or email.
 ---
 
 # Support ticket reply

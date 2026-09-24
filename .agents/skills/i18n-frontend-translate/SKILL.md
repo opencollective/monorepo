@@ -1,6 +1,6 @@
 ---
 name: i18n-frontend-translate
-description: Batches translation of opencollective-frontend locale JSON using show-untranslated and set-translation scripts, with codebase lookup for message IDs when context is unclear. Use when the user asks to translate frontend strings, reduce untranslated entries for a locale, or apply translation rules to lang files.
+description: Translates untranslated frontend locale strings with repo scripts. Use to translate a locale or reduce its untranslated entries.
 ---
 
 # i18n Frontend Translate

@@ -1,6 +1,6 @@
 ---
 name: security-investigate-report
-description: Triages an incoming security report for Open Collective codebases - searches `priv/security-issues` and opencollective/opencollective-security first for existing documentation, validates reproducibility and impact when new, maps to official bounty policy, proposes fixes, and drafts contributor replies. Writes artifacts under `/workspace/priv/security-issues/<unique-folder>/` including up to three core markdown files (`reply.md`, optional `issue.md` when fully confirmed, optional `plan.md` when there is a fix to plan), plus a minimal runnable PoC for full confirmation. Updates `security/memory.md` after full triage. After triage, offers optional production impact analysis (`impact.md`) and filing on opencollective/opencollective-security. Use when the user pastes or describes a security report, asks to investigate a vulnerability, assess bounty eligibility, or draft a response to security@opencollective.com reporters.
+description: Investigates Open Collective security reports and drafts contributor replies. Use for report triage or bounty eligibility checks.
 ---
 
 # Security report investigation (Open Collective)

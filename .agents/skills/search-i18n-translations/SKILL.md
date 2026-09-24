@@ -1,6 +1,6 @@
 ---
 name: search-i18n-translations
-description: Searches lang/en.json for existing i18n strings in opencollective-frontend. Use when implementing UIs, adding user-facing text, or when the user asks to find or reuse translations.
+description: Finds existing frontend translations in lang/en.json. Use when adding UI text or searching for reusable strings.
 ---
 
 # Search i18n Translations

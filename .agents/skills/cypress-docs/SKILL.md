@@ -1,6 +1,6 @@
 ---
 name: cypress-docs
-description: Search and extract Cypress information from official documentation (docs.cypress.io, cypress.io); prefer LLM markdown under /llm/* and refuse unverified API or behavior claims.
+description: Find verified Cypress guidance in official docs, preferring LLM markdown sources.
 model: inherit
 background: false
 metadata:

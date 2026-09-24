@@ -1,6 +1,6 @@
 ---
 name: gh-oc-project-create
-description: Creates and documents Open Collective core-team project issues on opencollective/opencollective via GitHub MCP—main `[Project]` issue with milestone and org project 5, plus linked sub-issues with types and optional area/complexity labels. Use when the user invokes /gh-oc-project-create, asks to file an OC project issue, or wants project issues with sub-issues on the OpenCollective GitHub repo.
+description: Creates a core-team project issue and linked sub-issues in opencollective/opencollective. Use when asked to file an Open Collective project issue.
 ---
 
 # OpenCollective project issue creation (GitHub MCP)

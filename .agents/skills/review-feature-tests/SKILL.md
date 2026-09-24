@@ -1,7 +1,7 @@
 ---
 name: review-feature-tests
 disable-model-invocation: true
-description: Reviews the test coverage of a feature in Open Collective and proposes a plan to improve coverage when needed. Use when asked to review tests for a feature, assess test coverage, find coverage gaps, or plan new tests. Covers opencollective-frontend (Jest), opencollective-api (Mocha), opencollective-pdf (Vitest), and opencollective-rest (Jest).
+description: Reviews feature test coverage across Open Collective services and proposes improvements. Use to assess coverage, find gaps, or plan tests.
 ---
 
 # Review Feature Tests

@@ -1,6 +1,6 @@
 ---
 name: security-investigate-issue
-description: Triages an internally reported security concern for Open Collective codebases (engineering, ops, or security team) - validates reproducibility and impact, asserts the finding with a clear confidence level, and proposes a fix plan when applicable. Writes artifacts under `/workspace/priv/security-issues/<unique-folder>/` including `issue.md` (assertion and verdict), optional `plan.md` when there is a fix to plan, plus a minimal runnable PoC for full confirmation. Offers optional production impact analysis (`impact.md`) at the end when queryable traces may exist. Updates `security/memory.md` after full triage. No external researcher reply or bounty policy. Use when the user describes an internal finding, asks to validate a suspected vulnerability from the team, or wants an engineering handoff without security@ or bounty workflow.
+description: Investigates internal Open Collective security concerns. Use to validate a finding and prepare an engineering handoff.
 ---
 
 # Security issue investigation - internal (Open Collective)

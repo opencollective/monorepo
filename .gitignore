@@ -1,6 +1,6 @@
 logs
 test
-opencollective/
-opencollective-*/
 priv/*
 package-lock.json
+opencode.json
+.opencode

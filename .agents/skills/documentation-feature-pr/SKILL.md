@@ -1,6 +1,6 @@
 ---
 name: documentation-feature-pr
-description: Drafts user-facing documentation in opencollective-documentation for a requested frontend feature, then offers to commit and open a PR. Pulls latest docs first, checks open PRs via GitHub MCP for duplicates, verifies against frontend code and GitBook. Use when the user invokes /documentation-feature-pr, asks to document a feature, update user docs, or open a documentation PR for a specific workflow.
+description: Drafts user-facing docs for Open Collective frontend features. Use when asked to document or update a feature workflow, or to prepare a documentation PR.
 ---
 
 # Documentation feature PR
