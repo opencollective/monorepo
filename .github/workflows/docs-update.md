@@ -78,7 +78,7 @@ steps:
       rm -f /tmp/gh-aw/data/prefetch-summary.json.tmp
       cat /tmp/gh-aw/data/prefetch-summary.json
 safe-outputs:
-  github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+  github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
   create-pull-request:
     title-prefix: "[docs] "
     target-repo: opencollective/documentation
