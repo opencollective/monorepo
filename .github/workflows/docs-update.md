@@ -52,7 +52,6 @@ safe-outputs:
   create-pull-request:
     title-prefix: "[docs] "
     target-repo: opencollective/documentation
-    reviewers: [znarf]
     draft: false
     max: 1
     expires: 21
@@ -90,7 +89,7 @@ Keep user documentation current for contributors, collective admins, and host ad
 
 ## Completion
 
-- When validated files changed, use `create_pull_request` to open one focused PR. The configured prefix is `[docs] ` and reviewer is `znarf`. Summarize pages updated, source codepaths verified, gaps addressed, and the exact `since`-to-`until` window. Do not merge it.
+- When validated files changed, use `create_pull_request` to open one focused PR. Summarize pages updated, source codepaths verified, gaps addressed, and the exact `since`-to-`until` window. Do not merge it.
 - If no verifiable, uncovered topics remain or no files changed, call `noop` with a short reason and relevant existing PR URLs. Do not create an empty PR.
 - Always call `post_slack_summary` with the outcome, pages and codepaths covered, coverage window, and relevant PR URLs when available. If `previousSuccessfulRunUrl` is null, state that no eligible previous run was found and the initial seven-day window was used.
 - Use `gh` for GitHub reads and configured safe outputs for external writes. Keep all file edits within the allowed documentation paths.
