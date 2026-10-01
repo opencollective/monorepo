@@ -1,0 +1,9 @@
+{
+  "features": {
+    "ghcr.io/robbert229/devcontainer-features/postgresql-client:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/robbert229/devcontainer-features/postgresql-client@sha256:aceac5b09662b4d169eb8c9497add67e0662ef71509b3011087d276e9eea5b1c",
+      "integrity": "sha256:aceac5b09662b4d169eb8c9497add67e0662ef71509b3011087d276e9eea5b1c"
+    }
+  }
+}
