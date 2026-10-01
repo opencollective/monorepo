@@ -1,0 +1,4 @@
+interface:
+  display_name: "API GraphQL V2 2FA hunt"
+  short_description: "Completeness check that admin-write V2 mutations enforce two-factor auth"
+  default_prompt: "Run the GraphQL V2 2FA completeness hunter on opencollective-api and classify each mutation. File a Bug only for confirmed admin-write misses with a real threat model."

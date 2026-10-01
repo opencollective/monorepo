@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review open security issues"
+  short_description: "Triage opencollective-security GitHub issues against current code (no fixes)"
+  default_prompt: "Run security-review-open-github-issues on open opencollective/opencollective-security issues without label agent > security-review-open-github-issues (default limit 10). Stamp each reviewed issue with that label; use force re-review only if the operator asks. Do not close issues only because SECURITY.md excludes the class (DoS, headers, etc.)-assert technical validity and keep open when still relevant. GitHub MCP only; one sub-agent per issue."

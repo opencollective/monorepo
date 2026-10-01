@@ -40,6 +40,6 @@ Ignore unless asked: `opencollective-tools`, `opencollective-studies`, `opencoll
 
 ## Security
 
-Triage: `.agents/skills/security-investigate-issue` (internal), `security-investigate-report` (incoming), shared `_shared.md`. Known-safe patterns: `.agents/skills/review-feature-security`. **Not defects:** public GraphQL introspection, permissive API CORS.
+Triage: `.agents/skills/security-investigate-issue` (internal), `security-investigate-report`. Known-safe patterns: `.agents/skills/review-feature-security`. **Not defects:** public GraphQL introspection, permissive API CORS.
 
 OWASP cheat sheets: https://cheatsheetseries.owasp.org/cheatsheets/ (or Context7 `/owasp/cheatsheetseries`). Pick by service and vuln class, not the index. Framing: `Secure_Code_Review` (does not replace skill outputs: `reply.md`, `issue.md` / `plan.md` / `impact.md`, PoC). GraphQL → `GraphQL`. REST → `REST_Security`. OAuth/tokens → `OAuth2`. Sessions/JWT/Passport → `Session_Management`, `Authentication`. Permissions/IDOR/private accounts → `Authorization`, `Access_Control`, `Insecure_Direct_Object_Reference_Prevention`. SQL → `SQL_Injection_Prevention`. Frontend → `Cross_Site_Scripting_Prevention`, `Cross-Site_Request_Forgery_Prevention`. Images → `File_Upload`. SSRF/webhooks → `Server_Side_Request_Forgery_Prevention`. Payments/expenses/ledger → `Business_Logic_Security`, `Third_Party_Payment_Gateway_Integration`. 2FA → `Multifactor_Authentication`. Node/Express → `Nodejs_Security`.

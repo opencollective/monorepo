@@ -1,0 +1,206 @@
+{
+  "$comment": "Long-term findings index (harness/index.json). validate-index.cjs interprets this schema. Patch only with scripts/patch-index.cjs; never LLM-rewrite the whole file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "findings"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fingerprint",
+          "title",
+          "verdict",
+          "sources",
+          "repo",
+          "paths",
+          "commitSha",
+          "lastSeen",
+          "issue",
+          "reports"
+        ],
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^oc:[a-z]+:[a-z0-9-]+:.+"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "needs_validation",
+              "rejected",
+              "invalid",
+              "duplicate",
+              "intentional",
+              "fixed",
+              "not_a_vuln"
+            ]
+          },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["harness", "bounty", "internal"]
+            }
+          },
+          "repo": {
+            "type": "string",
+            "enum": [
+              "opencollective-api",
+              "opencollective-frontend",
+              "opencollective-rest",
+              "opencollective-pdf",
+              "opencollective-images",
+              "unknown"
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "commitSha": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastSeen": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2}))?$"
+          },
+          "issue": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priorConfirmedChangedSource": {
+            "type": "boolean"
+          },
+          "reports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reporterName",
+                "reporterEmail",
+                "date",
+                "bountyUsd",
+                "gmailId",
+                "messageId",
+                "path"
+              ],
+              "properties": {
+                "reporterName": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reporterEmail": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                },
+                "bountyUsd": {
+                  "oneOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "gmailId": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "messageId": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^reports/[0-9]{4}-[0-9]{2}/[A-Za-z0-9._-]+/$"
+                },
+                "status": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": ["open", "merged", "sent"]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

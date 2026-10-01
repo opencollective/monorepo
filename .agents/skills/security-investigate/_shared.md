@@ -4,54 +4,53 @@ Used by `security-investigate-report` and `security-investigate-issue`. Read thi
 
 ## Issue folder
 
-Create a **new unique directory** under `/workspace/priv/security-issues/<unique-folder>/`.
+Create a **new unique directory** under `opencollective-security/internal/<unique-folder>/` (security repo checkout: `opencollective-security/` or `/workspace/opencollective-security`).
 
 - Name: `YYYY-MM-DD-<kebab-case-short-slug>` (e.g. `2026-04-20-expense-idor-preview`). If taken, append `-2`, `-3`, …
-- **All** outputs for the run (markdown, PoC, logs) go in this folder only.
+- **All** outputs for the run (markdown, PoC, logs) go in this folder only. Tree and file roles follow `opencollective-security/internal/README.md`.
 - Create the folder **after** the **Known issue check** (full triage) or **when a known match is found** (minimal write-up only). No PoC or full triage artifacts until the check clears.
-- Do not commit unless the user explicitly wants them versioned. Do not commit `priv/security-audit/` either (see `AGENTS.md`).
+- If the security repo is not checked out, **stop** and ask the user to check it out. Do not write triage folders under monorepo `priv/` and do not commit triage artifacts into OSS product repos. Commit the folder in the security repo when appropriate.
 
 ## Known issue check (required before full triage)
 
-**Before** the issue folder (except minimal artifacts on a match), PoC, or full code investigation, search **both** sources below. Read GitHub MCP tool schemas before calling (`search_issues`, `issue_read`).
+**Before** the issue folder (except minimal artifacts on a match), PoC, or full code investigation, search **both** sources below. Read the GitHub MCP tool schemas before calling.
 
-### 1. Local triage archive (`priv/security-issues`)
+### 1. Security-repo triage archive (`internal/`, `reports/`, index)
 
-Search `/workspace/priv/security-issues/` for prior runs of the **same finding** (not merely shared keywords).
+Search the security repo checkout for prior runs of the **same finding** (not merely shared keywords).
 
 **How to search:**
 
-- List folder names; match distinctive slugs (mutation names, endpoints, vuln class).
-- Grep `issue.md`, `reply.md`, and `SUMMARY.md` under that tree for distinctive terms, report/reference IDs, and code paths.
+- Prefer `harness/index.json` by exact fingerprint, then GitHub issues (section 2 below), then grep `internal/**` and `reports/**` for fingerprints and distinctive terms in `issue.md` / `reply.md`.
+- List `internal/` folder names; match distinctive slugs (mutation names, endpoints, vuln class).
 - Read the top of promising `issue.md` / `reply.md` files (title, summary, verdict) before deciding.
 
 **Match confidence:** Same code path or missing control as an existing folder — e.g. same mutation/resolver bypass, not two unrelated IDORs that share "GraphQL". A folder whose verdict is **Duplicate** still counts if it points at the canonical prior triage.
 
-**Local match →** Treat as duplicate. Cite the existing folder path (e.g. `priv/security-issues/2026-06-02-order-fromaccount-private-leak/`) and, when present in that folder's write-up, any linked `opencollective-security` issue. Skip full triage (see **Match found** below).
+**Archive match →** Treat as duplicate. Cite the existing folder path (e.g. `opencollective-security/internal/2026-06-02-order-fromaccount-private-leak/`) and, when present in that folder's write-up, any linked `opencollective-security` issue. Skip full triage (see **Match found** below).
 
 ### 2. GitHub (`opencollective-security`)
 
-Search [opencollective-security](https://github.com/opencollective/opencollective-security/issues) via **GitHub MCP** (`user-github`).
+Search [opencollective-security](https://github.com/opencollective/opencollective-security/issues) via **GitHub MCP**.
 
 **If MCP unavailable:** Require enablement or explicit user confirmation that no matching issue exists. Do not skip to full triage without that.
 
-**Search:** From the finding, extract terms (vuln class, service, endpoint/mutation, paths, distinctive phrases). Run **multiple** `search_issues` queries (`owner`: `opencollective`, `repo`: `opencollective-security`); include open **and** closed issues (fixed-but-documented still counts). Compare candidates with **high confidence** (same code path or missing control, not shared keywords). If a report or reference ID was supplied, search issue bodies for it too.
+**Search:** From the finding, extract terms (vuln class, service, endpoint/mutation, paths, distinctive phrases). Run **multiple** issue-search queries for `opencollective/opencollective-security`; include open **and** closed issues (fixed-but-documented still counts). Compare candidates with **high confidence** (same code path or missing control, not shared keywords). If a report or reference ID was supplied, search issue bodies for it too.
 
-Also check whether a confident GitHub match already has a folder under `priv/security-issues` (cross-link in the duplicate write-up when both exist).
+Also check whether a confident GitHub match already has a folder under `internal/` (cross-link in the duplicate write-up when both exist).
 
 ### Match found → stop full triage
 
 - No repro deep-dive, PoC, fix plan, bounty work, or new tracking issue draft.
 - Create issue folder; write **minimal artifacts only** (per invoking skill):
   - **Report skill:** `reply.md` only (Known issue / duplicate template).
-  - **Internal skill:** `issue.md` only (verdict **Duplicate**, link to existing issue and/or prior `priv/security-issues` folder, search summary).
+  - **Internal skill:** `issue.md` only (verdict **Duplicate**, link to existing issue and/or prior `internal/` folder, search summary).
 - In-chat: verdict **Duplicate / known issue**; existing GitHub issue URL/number and status when applicable; prior triage folder path when applicable; search summary; folder path and file written.
-- Optionally offer `add_issue_comment` on the existing GitHub issue if the user wants.
-- **Do not** add a row to [`security/memory.md`](../../../security/memory.md) on the duplicate path (the canonical entry should already be there).
+- Optionally offer to comment on the existing GitHub issue if the user wants.
 
 ### No match →
 
-Brief search summary (both local archive and GitHub), then **Core triage workflow** below.
+Brief search summary (security-repo archive and GitHub), then **Core triage workflow** below.
 
 ## Core triage workflow
 
@@ -80,27 +79,6 @@ Skip when there is nothing concrete to query (no durable audit trail, purely cli
 
 When applicable: ordered fix plan (patch, tests, migrations/schema, rollout, owner notes).
 
-## Security memory (`security/memory.md`)
+## Index upsert (after full triage, not on duplicate)
 
-After **full triage** (not on the duplicate / known-issue short path), update [`/workspace/security/memory.md`](../../../security/memory.md) so the long-term index stays current.
-
-**Skip when:** Verdict is **Duplicate** (local or GitHub) — the canonical row should already exist.
-
-**Add or update one table row per distinct finding** (not per artifact file):
-
-| Column   | Source |
-| -------- | ------ |
-| **Date** | Folder date prefix (`YYYY-MM-DD-…`) or triage date |
-| **Title** | `issue.md` H1, or concise title from `reply.md` / triage summary |
-| **Bounty** | Amount paid (e.g. `$120`), recommended band when pending (e.g. `$300` with note in triage only), or **—** when none |
-
-**Reporter grouping:**
-
-- **Report triage:** Section `## <Name> (<email>)` from the report; create the section if missing. Use the reporter's preferred name when known.
-- **Internal triage:** Section `## Internal` unless the user supplied a named contact; optional `(<email>)` on the heading.
-
-**Ordering:** Keep sections alphabetically by reporter name (`Internal` sorts with other headings). Within each table, append new rows in chronological order.
-
-**Idempotency:** If the same finding (same title and date) is already listed, update the **Bounty** cell when new payment info is known; do not duplicate the row.
-
-Record the memory update in the in-chat summary (reporter section and title added or bounty updated).
+Patch `opencollective-security/harness/index.json` with the monorepo `patch-index.cjs` (`--mode internal` for own investigations, `--mode bounty` for bounty-origin triage), linking the `internal/` folder via `--report` JSON `path` when applicable. Field ownership is in [OC-OVERLAY.md](../security-audit/OC-OVERLAY.md) — never rewrite the whole index.

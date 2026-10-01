@@ -1,0 +1,4 @@
+interface:
+  display_name: "API GraphQL V2 scope hunt"
+  short_description: "Completeness check that V2 queries, mutations, and nested fields enforce the correct OAuth scopes"
+  default_prompt: "Run the GraphQL V2 OAuth scope completeness hunter on opencollective-api. Flag missing, wrong, incomplete, or description-drifted scopes. Presence of some helper is not enough."
