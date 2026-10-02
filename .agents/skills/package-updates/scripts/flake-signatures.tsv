@@ -1,0 +1,22 @@
+# pattern (grep -E)	signature. Matched against failure summaries; whole-log fallback is hints only.
+27-expenses	e2e flake: 27-expenses (recurring invoice/reimbursement setup)
+39-recurring-contributions	e2e flake: 39-recurring-contributions (filter popover closes)
+21-collective.create	e2e flake: 21-collective.create (tags / 404 on new collective page)
+SequelizeDatabaseError: deadlock detected|40P01	unit flake: Postgres 40P01 deadlock (test DB reset vs lingering Activities insert)
+This order is already been processed	unit flake: Order.lock retry race (fixed by api #12144; rerun if it reappears)
+The operation was canceled	cancelled: superseded by a newer push or a sibling job failure
+lockfile-lint@	lockfile-lint npx stall (rerun)
+The runner has received a shutdown signal|lost communication with the server	infra: runner lost (rerun)
+No space left on device	infra: runner disk full (rerun)
+ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|503 Service Unavailable	infra: network (rerun)
+Unable to download artifact|Artifact not found|Failed to CreateArtifact	infra: artifact upload/download (rerun once; if it repeats see references/failures.md)
+manifest unknown|pull access denied|Error response from daemon	infra: service container image pull failed (not a flake; check the image tag)
+Cannot query field ".*" on type	schema mismatch: same-named frontend/API branch out of sync (see references/failures.md)
+error TS[0-9]+	real: TypeScript error
+[0-9]+ problems? \([0-9]+ errors?	real: ESLint error
+Code style issues found	real: Prettier formatting
+Cannot find module|Module not found|is not exported from	real: missing or renamed export/dependency
+EBADENGINE|Unsupported engine	real: engines mismatch (npm/node major)
+Unused exports|ts-unused-exports	real: unused export flagged
+Unused dependencies|Missing dependencies	real: depcheck
+Cannot get schema for 'ECDSASigValue' target	real: WebAuthn ASN.1 schema registry mismatch (check duplicate asn1-schema copies; see references/failures.md)
