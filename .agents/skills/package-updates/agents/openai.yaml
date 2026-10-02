@@ -1,4 +1,4 @@
 interface:
   display_name: "Package Updates"
-  short_description: "Review and maintain api/frontend/rest/images dependency PRs"
-  default_prompt: "Use $package-updates to maintain the package update PRs on api, frontend, rest and images: rebase and retry what can be, prepare fixes, and give me one batch to approve."
+  short_description: "Review and maintain api/frontend/rest/images/pdf dependency PRs"
+  default_prompt: "Use $package-updates to maintain the package update PRs on api, frontend, rest, images and pdf: rebase and retry what can be, prepare fixes, and give me one batch to approve."

@@ -3,7 +3,7 @@
 Historical observations from September and October 2026. Verify relevant settings in the current checkout
 and GitHub before acting; these notes do not grant authorization or override AGENTS.md.
 
-All four repos (api, frontend, rest, images) use Renovate (Mend app) with the shared preset
+All five repos (api, frontend, rest, images, pdf) use Renovate (Mend app) with the shared preset
 `local>opencollective/renovate-config` (`config:best-practices`, `:preserveSemverRanges`, schedule
 weekdays 02:00-06:00 UTC and weekends, no automerge, `minimumReleaseAge` from best-practices except
 `@opencollective/*`). Automerge is disabled by config and `allow_auto_merge` is off, so every merge
@@ -50,6 +50,24 @@ Apollo Client 4 (#654) returns GraphQL errors as `error` (CombinedGraphQLErrors)
 `errorPolicy: 'all'`, and needs `rxjs` as a production dependency (`legacy-peer-deps` skips peers).
 Check commit authors before requesting Renovate's rebase; compatibility commits require a local rebase.
 
+**opencollective-pdf** (`opencollective/opencollective-pdf`, checkout `opencollective-pdf/` or
+`~/Dev/opencollective/pdf`): Node 24.x / npm 11.x (`.nvmrc` = 24), npm lockfile, TypeScript (`tsc`
+build, `tsx` in dev). Older notes describing it as Next.js 12 / Node 18 are outdated:
+it is an Express 5 server rendering with `@react-pdf/renderer` and React 19, Apollo Client 3 and
+graphql 16. Renovate opens the version updates; Dependabot opens only security updates (no
+`dependabot.yml`), mostly transitive `build(deps)` / `build(deps-dev)` bumps, so the same package can
+appear in both. CI jobs (`ci.yml`): lint, prettier, typescript, test, check-tax-forms-config, depcheck;
+plus `lockfile-lint.yml` and CodeQL (`Analyze`). Required checks: lint, prettier, test. One approving
+review is required, auto-merge is off, squash merge is allowed. Local quality: `npm run type:check`,
+`npm run lint`, `npm run prettier:check`, `npm run depcheck`, `npm test` (Vitest).
+The `test` job needs no API or database: `test/server/*` mock the GraphQL API with `nock` and compare
+rendered PDFs to PNG snapshots in `test/__snapshots__` (`pdf-visual-diff`). A bump of anything in the
+rendering path (`@react-pdf/*`, fonts, `pdf-visual-diff`, `canvas`/`pdfjs`, React) can move pixels:
+download the `snapshots-<run-id>-*` artifact the job uploads on failure and Read the diff PNGs before
+deciding between a real regression and an expected visual change (`npm run test:update` regenerates
+the snapshots; that change needs the user's review). `test` also uploads to Codecov with
+`fail_ci_if_error`, so a Codecov outage turns it red: an infra flake, rerun once.
+
 |                             | opencollective-api                                                                                                   | opencollective-frontend                                                                             |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | GitHub                      | `opencollective/opencollective-api`                                                                                  | `opencollective/opencollective-frontend`                                                            |
@@ -64,7 +82,7 @@ Check commit authors before requesting Renovate's rebase; compatibility commits 
 | Local quality               | `npm run type:check`, `npm run lint:check`, `npm run prettier:check`                                                 | `npm run type:check`, `npm run lint:quiet`, `npm run prettier:check`                                |
 | Tests                       | Mocha (`npm run test`), needs Postgres                                                                               | Jest (`npm run test`), Cypress e2e                                                                  |
 
-Labels used by this skill in all four repos: `blocked` (`b60205`, with a "Blocked by …" comment) and
+Labels used by this skill in all five repos: `blocked` (`b60205`, with a "Blocked by …" comment) and
 `major` (`d93f0b`, a major of a critical dependency that only the user merges; api #11701 stripe v22
 is the first one).
 

@@ -88,13 +88,14 @@ sys.exit(r.returncode)
     def test_resolve_repo_accepts_every_service_and_rejects_others(self):
         lib = SCRIPTS / '_lib.sh'
         for short, slug in [('api', 'opencollective-api'), ('frontend', 'opencollective-frontend'),
-                            ('rest', 'opencollective-rest'), ('images', 'opencollective-images')]:
+                            ('rest', 'opencollective-rest'), ('images', 'opencollective-images'),
+                            ('pdf', 'opencollective-pdf')]:
             for name in (short, slug, 'opencollective/' + slug):
                 result = run(['bash', '-c', f'source "{lib}"; resolve_repo "{name}"; echo "$REPO $SHORT"'], env=self.env)
                 self.assertEqual(result.stdout.strip(), f'opencollective/{slug} {short}', result.stderr)
-        result = run(['bash', '-c', f'source "{lib}"; resolve_repo pdf'], env=self.env)
+        result = run(['bash', '-c', f'source "{lib}"; resolve_repo taxes'], env=self.env)
         self.assertEqual(result.returncode, 2)
-        self.assertIn('<api|frontend|rest|images>', result.stderr)
+        self.assertIn('<api|frontend|rest|images|pdf>', result.stderr)
 
     def test_shell_syntax(self):
         for file in SCRIPTS.glob('*.sh'):

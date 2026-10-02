@@ -3,7 +3,7 @@
 # package.json conflicts are replayed one commit at a time with a three-way merge (reapply-bump.js); lockfile
 # conflicts with manifest changes regenerate the lockfile in full. Lockfile-only commits and ambiguous
 # manifest changes stop for manual resolution; never discard the resolved versions in a lockfile-only bump.
-# usage: local-rebase.sh <api|frontend|rest|images> <pr-number> [--push] [--squash]
+# usage: local-rebase.sh <api|frontend|rest|images|pdf> <pr-number> [--push] [--squash]
 #   without --push: rebases, prints the worktree path and the expected old sha; you verify, then push with
 #     git -C <worktree> push --force-with-lease=<branch>:<old-sha> origin HEAD:<branch>
 #   with --push: pushes after a clean rebase only, when the user authorized pushing
