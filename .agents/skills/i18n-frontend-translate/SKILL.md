@@ -18,6 +18,7 @@ description: Translates untranslated frontend locale strings with repo scripts. 
 ## Workflow (loop)
 
 1. **User inputs**: `locale` + free-text **instructions** (follow them for register, formality, product terms, and consistency).
+   If `references/<locale>.md` exists in this skill, read it first and follow it: it is the style guide for that locale (glossary, address form, terms kept in English). Currently: [references/de.md](references/de.md) for German.
 
 2. **List work**: Run show-untranslated with a small batch so the task stays reviewable:
 
@@ -30,7 +31,7 @@ description: Translates untranslated frontend locale strings with repo scripts. 
 3. **Per string**:
    - Read the line: `{id}: {english}`.
    - If meaning, audience, or UI role is unclear, **find context** before translating (see below).
-   - If the string **should stay English** in this locale (same word in both languages, standard loanword, product name, etc.), **do not** run `set-translation`. Add the **exact English string** (full message value) to `IGNORED[<locale>]` in `scripts/i18n/show-untranslated.ts` so it stops appearing in the report. Keep a short inline comment per entry (e.g. why it is not translated).
+   - If the string **should stay English** in this locale (same word in both languages, standard loanword, product name, or a term the locale style guide keeps in English), **do not** run `set-translation`. Add the **message id** to `IGNORED['<locale>']` in `scripts/i18n/translation-stats.ts` so it stops appearing in the report. Keep a short inline comment per entry (e.g. why it is not translated). Ignore matching is by **id**, not by English value.
    - Otherwise produce the target-language string that matches instructions and preserves placeholders/markup, then apply:
 
    ```bash
@@ -51,7 +52,7 @@ description: Translates untranslated frontend locale strings with repo scripts. 
 
 ## Intentionally identical strings (`IGNORED`)
 
-The script compares full English message values. When a value is correctly left as English for that locale, register it under `IGNORED` in `opencollective-frontend/scripts/i18n/show-untranslated.ts` (per-locale arrays of exact strings). Otherwise the loop never clears.
+`show-untranslated` reports ids whose locale value still equals English, minus `IGNORED` for that locale. When a value is correctly left as English, register the **message id** under `IGNORED` in `opencollective-frontend/scripts/i18n/translation-stats.ts`. Otherwise the loop never clears, and the weekly `[i18n-<locale>]` workflow translates the string back.
 
 ## Finding context for a message `id`
 
@@ -75,14 +76,22 @@ Use when the English line alone is ambiguous (button vs heading, legal vs casual
 
 - Keep **ICU placeholders** and **rich-text tags** exactly as in English unless the target language requires a different order: `{name}`, `{count}`, `{amount}`, `<Link>...</Link>`, `<Account></Account>`, etc.
 - Do not invent new placeholders or remove required tags.
-- Prefer **consistent product terminology** with the rest of `lang/<locale>.json` when the same concept appears elsewhere.
+- Prefer **consistent product terminology**: the locale style guide in `references/<locale>.md` when one exists, then the rest of `lang/<locale>.json` when the same concept appears elsewhere.
+
+## Locale style guides
+
+| Locale | Guide                                | Covers                                                                                                                                     |
+| ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `de`   | [references/de.md](references/de.md) | Financial and accounting glossary, Fiscal Host and other terms kept in English, "du" address, typography, ids that belong in `IGNORED.de`. |
+
+Read the guide before translating or reviewing that locale. When a guide and existing catalog strings disagree, the guide wins: the catalog may still contain the mistranslations the guide was written to remove.
 
 ## Scripts reference
 
-| Script / npm script                 | Role                                                                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `scripts/i18n/show-untranslated.ts` | Lists `{id}: english` where locale value still equals English, minus per-locale `IGNORED` exact strings. Optional `--limit N`. |
-| `scripts/i18n/set-translation.ts`   | Writes one key: `set-translation.ts <locale> <id> "text"`                                                                      |
-| `npm run langs:update-progress`     | Recomputes per-locale completion % and writes `lib/constants/locales.js`. Run once when done.                                  |
+| Script / npm script                 | Role                                                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/i18n/show-untranslated.ts` | Lists `{id}: english` where locale value still equals English, minus per-locale `IGNORED` message ids. Optional `--limit N`. |
+| `scripts/i18n/set-translation.ts`   | Writes one key: `set-translation.ts <locale> <id> "text"`                                                                    |
+| `npm run langs:update-progress`     | Recomputes per-locale completion % and writes `lib/constants/locales.js`. Run once when done.                                |
 
 Show-untranslated and set-translation are invoked with `npx tsx` from `opencollective-frontend/`.
