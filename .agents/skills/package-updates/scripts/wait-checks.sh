@@ -2,7 +2,7 @@
 # Poll every PR each time; no sticky completion state across head changes.
 # After rebase: EXPECT_HEAD_CHANGE=1 and HEADS_FILE captured BEFORE requesting it.
 # HEADS_FILE format: one '<pr-number> <head-sha>' per line.
-# usage: wait-checks.sh <api|frontend|rest|images> <pr-number> ...
+# usage: wait-checks.sh <api|frontend|rest|images|pdf> <pr-number> ...
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 [[ $# -gt 0 ]] || { echo "at least one PR is required" >&2; exit 2; }
 TIMEOUT_MIN="${TIMEOUT_MIN:-45}"; INTERVAL="${INTERVAL:-30}"
