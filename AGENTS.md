@@ -22,8 +22,6 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 - **opencollective-images** - Image upload, processing, and optimization
 - **opencollective-documentation** - Public user docs (GitBook)
 
-Ignore unless asked: `opencollective-tools`, `opencollective-studies`, `opencollective-rss`, `opencollective-github-actions-monitor`.
-
 **Infra:** Docker Compose; Heroku staging/prod; GitHub Actions; Postgres 14+, Redis; S3 prod / MinIO local; Mailpit local; OpenSearch; Sentry/OpenTelemetry/Hyperwatch.
 
 ## Development

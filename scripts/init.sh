@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Open Collective Development Environment Setup Script
-# This script clones all Open Collective repositories
+# Clone or update Open Collective submodules to the latest origin/main.
 
 set -e  # Exit on any error
 
@@ -58,30 +58,50 @@ resolve_project() {
     return 1
 }
 
-# Function to clone a repository
-clone_repo() {
-    local repo_url="$1"
-    local repo_name="$2"
-    local target_dir="$repo_name"
-    
-    if [ -d "$target_dir" ]; then
-        return 0  # Repository already exists, return success
+# Fetch every time, but never discard local work to reach origin/main.
+init_repo() {
+    local name="$1"
+    local path="$2"
+    local -a clone_args=()
+    local changes
+
+    git submodule init -- "$path" || return 1
+    git config "submodule.$name.branch" main || return 1
+    git config "submodule.$name.ignore" all || return 1
+
+    if [ ! -e "$path/.git" ]; then
+        if [ "$SHALLOW_CLONE" = "true" ]; then
+            # Submodule cloning follows remote HEAD; include main even if HEAD differs.
+            clone_args+=(--depth 1 --no-single-branch)
+        fi
+        git submodule update --init --remote --checkout "${clone_args[@]}" -- "$path" || return 1
     fi
-    
-    print_status "Cloning $repo_name from $repo_url..."
-    
-    # Use shallow cloning if --shallow flag is provided
-    local git_args=""
-    if [ "$SHALLOW_CLONE" = "true" ]; then
-        git_args="--depth 1 --single-branch"
-    fi
-    
-    if git clone $git_args "$repo_url" "$target_dir"; then
-        print_success "Successfully cloned $repo_name"
-    else
-        print_error "Failed to clone $repo_name"
+
+    # Explicitly fetch main even if this checkout only tracks another branch.
+    git -C "$path" config --replace-all remote.origin.fetch \
+        '+refs/heads/main:refs/remotes/origin/main' '^\+?refs/heads/main:' || return 1
+    git -C "$path" fetch --no-recurse-submodules origin \
+        '+refs/heads/main:refs/remotes/origin/main' || return 1
+
+    changes=$(git -C "$path" status --porcelain) || return 1
+    if [ -n "$changes" ]; then
+        print_error "$path has uncommitted changes. Commit or stash them, then rerun init."
         return 1
     fi
+
+    if git -C "$path" show-ref --verify --quiet refs/heads/main; then
+        if ! git -C "$path" merge-base --is-ancestor main origin/main; then
+            print_error "$path has local commits on main that are not on origin/main. Move or reconcile them, then rerun init."
+            return 1
+        fi
+        git -C "$path" switch main || return 1
+    else
+        git -C "$path" switch --create main --track origin/main || return 1
+    fi
+
+    git -C "$path" merge --ff-only origin/main || return 1
+    git -C "$path" branch --set-upstream-to=origin/main main || return 1
+    print_success "$path is up to date on main"
 }
 
 # Main execution
@@ -107,10 +127,13 @@ main() {
                 echo "Usage: $0 [--shallow] [--projects PROJECTS]"
                 echo ""
                 echo "Options:"
-                echo "  --shallow              Use shallow cloning (--depth 1 --single-branch) for faster, smaller clones"
-                echo "  --projects PROJECTS    Comma-separated list of projects to clone (default: all)"
+                echo "  --shallow              Use shallow cloning (--depth 1) for new submodules"
+                echo "  --projects PROJECTS    Comma-separated list of projects to initialize/update (default: all)"
                 echo "                         Use short names (api, frontend) or full directory names (opencollective-api)"
                 echo "  -h, --help             Show this help message"
+                echo ""
+                echo "Every run fetches and checks out the latest origin/main for selected projects."
+                echo "Uncommitted changes or unpublished commits on main cause an error; local work is preserved."
                 exit 0
                 ;;
             *)
@@ -127,7 +150,7 @@ main() {
         print_status "Shallow cloning mode enabled"
     fi
     
-    # Repository list comes from .gitmodules (path + url per submodule)
+    # Repository list comes from .gitmodules (name + path per submodule)
     local GITMODULES="$PROJECT_ROOT/.gitmodules"
     if [ ! -f "$GITMODULES" ]; then
         print_error ".gitmodules not found at $GITMODULES"
@@ -135,13 +158,12 @@ main() {
     fi
     
     local -a repositories=()
-    local line name path url
+    local line name path
     while IFS= read -r line; do
         [[ "$line" =~ ^submodule\.([^=]+)\.path=(.*)$ ]] || continue
         name="${BASH_REMATCH[1]}"
         path="${BASH_REMATCH[2]}"
-        url=$(git config -f "$GITMODULES" --get "submodule.$name.url") || continue
-        repositories+=("$url" "$path")
+        repositories+=("$name" "$path")
     done < <(git config -f "$GITMODULES" -l | grep '^submodule\..*\.path=')
     
     if [ "${#repositories[@]}" -eq 0 ]; then
@@ -195,42 +217,38 @@ main() {
 
         local -a filtered=()
         for ((i=0; i<${#repositories[@]}; i+=2)); do
-            local repo_url="${repositories[i]}"
-            local repo_name="${repositories[i+1]}"
+            local repo_name="${repositories[i]}"
+            local repo_path="${repositories[i+1]}"
             local include=false
             for path in "${selected_paths[@]}"; do
-                [ "$path" = "$repo_name" ] && include=true && break
+                [ "$path" = "$repo_path" ] && include=true && break
             done
-            [ "$include" = true ] && filtered+=("$repo_url" "$repo_name")
+            [ "$include" = true ] && filtered+=("$repo_name" "$repo_path")
         done
         repositories=("${filtered[@]}")
-        print_status "Cloning selected projects only: ${selected_paths[*]}"
+        print_status "Initializing/updating selected projects only: ${selected_paths[*]}"
     fi
 
     if [ "${#repositories[@]}" -eq 0 ]; then
-        print_error "No repositories to clone"
+        print_error "No repositories to initialize/update"
         exit 1
     fi
     
-    # Clone repositories
+    # Initialize/update repositories, continuing after individual failures.
     local failed_repos=()
     local total_repos=${#repositories[@]}
     local processed=0
     
     for ((i=0; i<total_repos; i+=2)); do
-        local repo_url="${repositories[i]}"
-        local repo_name="${repositories[i+1]}"
-        local target_dir="$repo_name"
+        local repo_name="${repositories[i]}"
+        local repo_path="${repositories[i+1]}"
         
         processed=$((processed + 1))
         
-        if [ -d "$target_dir" ]; then
-            print_status "Processing repository $(printf "%02d" $processed)/$(printf "%02d" $((total_repos/2))): $repo_name (already exists)"
-        else
-            print_status "Processing repository $(printf "%02d" $processed)/$(printf "%02d" $((total_repos/2))): $repo_name"
-            if ! clone_repo "$repo_url" "$repo_name"; then
-                failed_repos+=("$repo_name")
-            fi
+        print_status "Processing repository $(printf "%02d" $processed)/$(printf "%02d" $((total_repos/2))): $repo_path"
+        if ! init_repo "$repo_name" "$repo_path"; then
+            print_error "Failed to initialize/update $repo_path"
+            failed_repos+=("$repo_path")
         fi
     done
     
@@ -238,14 +256,15 @@ main() {
     echo "================================================="
 
     if [ ${#failed_repos[@]} -eq 0 ]; then
-        print_success "All repositories cloned successfully!"
+        print_success "All selected repositories are up to date on main!"
     else
-        print_warning "Some repositories failed to clone:"
+        print_warning "Some repositories failed to initialize/update:"
         for repo in "${failed_repos[@]}"; do
             echo "  - $repo"
         done
         echo ""
-        print_status "You can try running the script again to retry failed repositories."
+        print_status "Resolve the errors above, then rerun the script to retry."
+        return 1
     fi
     
     echo "================================================="
