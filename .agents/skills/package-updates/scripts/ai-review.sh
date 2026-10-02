@@ -12,6 +12,8 @@ strip() { perl -0pe 's/<details>.*?<summary>(.*?)<\/summary>/[$1] /gs; s/<[^>]+>
 case "${1:-}" in
   --worktree)
     wt="${2:?worktree path}"; title="${3:-}"
+    # codex is usually installed globally under nvm's Node 24, absent from a non-interactive PATH
+    command -v codex >/dev/null 2>&1 || use_node24 >/dev/null || true
     need codex
     if [[ -n "$(git -C "$wt" status --porcelain)" ]]; then
       echo "Commit the worktree changes before reviewing against origin/main: $wt" >&2; exit 2
@@ -22,9 +24,9 @@ case "${1:-}" in
     out=$(mktemp "$S/review-$(basename "$wt").XXXXXX")
     # `codex review` refuses a custom prompt together with --base; the title carries the context
     # CODEX_MODEL overrides the model from ~/.codex/config.toml for this run; only set it when the user asks (cost)
-    codex_args=()
+    codex_args=()  # expanded with ${a[@]+...}: bash 3.2 (macOS) treats an empty array as unset under `set -u`
     [[ -z "${CODEX_MODEL:-}" ]] || codex_args+=(-c "model=\"$CODEX_MODEL\"")
-    rc=0; (cd "$wt" && codex "${codex_args[@]}" review --base origin/main --title "${title:-dependency update}" > "$out" 2>&1) || rc=$?
+    rc=0; (cd "$wt" && codex ${codex_args[@]+"${codex_args[@]}"} review --base origin/main --title "${title:-dependency update}" > "$out" 2>&1) || rc=$?
     # A usage limit or an interrupted run still exits 0 and prints a verdict-looking line: report it as no review
     if [ "$rc" -ne 0 ] || grep -qE "usage limit|Review was interrupted|is not supported when using Codex" "$out"; then
       echo "codex review did NOT complete (exit $rc)"

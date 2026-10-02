@@ -359,6 +359,11 @@ sys.exit(int(os.environ['REVIEW_EXIT']))
         args = json.loads((self.root / 'codex-args').read_text())
         self.assertEqual(args[:2], ['-c', 'model="requested-model"'])
 
+    def test_local_review_without_model_override(self):
+        result = self.local_review('tool output\ncodex\nNo findings.')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads((self.root / 'codex-args').read_text())[0], 'review')
+
     def test_local_review_missing_verdict_is_incomplete(self):
         result = self.local_review('tool output only')
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
