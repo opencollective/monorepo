@@ -25,13 +25,13 @@ All under `opencollective-security/internal/<unique-folder>/` (security repo che
 | ----------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `issue.md`  | **Always**                    | Assertion: reference ID (if any), title suggestion, claim summary, **verdict** (Confirmed / Provisional / Invalid / Duplicate / Intentional / Unclear) with reasoning, impact, components, code refs, PoC path/run (or why not), severity, next steps. One canonical internal write-up. |
 | `plan.md`   | **Fix to plan**               | Per **\_shared.md**.                                                                                                                                                                                                                                                                    |
-| `impact.md` | **User accepts impact offer** | Per **\_shared.md**. Do not create during default triage.                                                                                                                                                                                                                               |
+| `impact.md` | **User accepts impact offer (dashboard harness: always)** | Per **\_shared.md** (single live check). Do not create during default chat triage. Dashboard automation mode must always write it.                                                                                                                                                                                                                               |
 
 ## Production impact analysis (optional)
 
-After the in-chat summary, **offer** production impact analysis when abuse may leave **queryable traces** (DB rows, audit logs, etc.). Do not write **`impact.md`** unless the user accepts.
+After the in-chat summary, **offer** production impact analysis when abuse may leave **queryable traces** (DB rows, audit logs, etc.). Do not write **`impact.md`** unless the user accepts — **except** in dashboard automation mode, where it is always written.
 
-- **Offer when:** Fully or provisionally confirmed findings where forensic checks could clarify whether exploitation occurred in production.
+- **Offer when:** Fully or provisionally confirmed findings where a quick live check could clarify whether exploitation occurred in production.
 - **On accept:** Write **`impact.md`** per **\_shared.md** and note the new file in chat.
 
 ## In-chat summary

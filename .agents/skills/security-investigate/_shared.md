@@ -61,19 +61,45 @@ Brief search summary (security-repo archive and GitHub), then **Core triage work
 5. **Severity** - Worst realistic exploitation; CVSS3-style reasoning. OC amplifiers: auth, payment methods/connected accounts, ledger integrity/history, permission system. Map to bands: CVSS ≥9 → High, ≥8 → Medium, ≥7 → Low (full reasoning in write-ups).
 6. **Fix plan** - Minimal ordered steps: patch location, tests, schema/migration impacts, rollout. Match repo patterns. Write **`plan.md`** when there is something to build (skip for clear invalid/duplicate/out-of-scope).
 
-**Do not** run production impact analysis or write **`impact.md`** during core triage. That is an **end-of-triage offer** only (see invoking skill). In write-ups, describe claimed or theoretical impact in **`issue.md`** / **`reply.md`**; reserve **`impact.md`** for forensic production-evaluation queries after the user accepts.
+**Do not** run production impact analysis during core triage, except for **dashboard harness runs which must always write `impact.md`**. That aside, it is an **end-of-triage offer** only (see invoking skill). In write-ups, describe claimed or theoretical impact in **`issue.md`** / **`reply.md`**; reserve **`impact.md`** for a single live-exploitation screen after the user accepts (or automatically for dashboard runs).
 
-## `impact.md` (on user acceptance only)
+## `impact.md` (one live check, keep it short)
 
-Write only when the user accepts the **production impact analysis** offer at the end of triage (do not create by default). Use when triage can name **specific, reproducible data patterns** indicating abuse. Tie queries to traced schema (Sequelize models, not migrations; see `opencollective-api/AGENTS.md`). Keep forensic focus; do not duplicate the main engineering narrative.
+Goal: answer "is there any suspicious activity live right now?" with **one copy-paste query**. Keep the file under ~30 lines. One verdict, one signal, one query, one reading guide. No forensics essay.
 
-1. **Purpose** - What "exploited" means in observable terms.
-2. **Assumptions** - Tables/entities, time window, detection limits.
-3. **Queries** - Numbered read-only checks. Prefer PostgreSQL `SELECT`. For logs, name source and exact filters.
-4. **How to interpret** - What supports vs undermines exploitation.
-5. **Safety** - Read-only; internal ops policy; no production secrets in the folder.
+Dashboard harness runs: **always write `impact.md`**. Chat triage (`security-investigate-report` / `security-investigate-issue`): write only after the user accepts the offer. When nothing leaves a queryable trail, still write the file using the skip note below.
 
-Skip when there is nothing concrete to query (no durable audit trail, purely client-side, no DB/log signature).
+Template:
+
+````md
+# Impact - <short slug>
+Verdict: no sign | suspicious | exploited | cannot tell
+Signal: <one line - what abused rows would look like>
+Model: <Sequelize model file, e.g. server/models/Expense.ts - table "Expenses">
+Query:
+```sql
+SELECT ... FROM "..." WHERE ... ORDER BY ... LIMIT 50;
+```
+Read: <one line - what in the result means suspicious vs clean>
+Limits: <one line - time window, blind spots>
+````
+
+Rules:
+
+- **One `SELECT` only.** Read-only, `LIMIT 50` max, default window last 90 days unless the finding is older. Add a second query only if the first needs disambiguation.
+- Tie the table/column to the traced Sequelize model (`server/models/*.ts`, not migrations; see `opencollective-api/AGENTS.md`).
+- No production secrets in the folder, no full dumps.
+
+Skip note (no durable trail — purely client-side, no DB/log signature):
+
+```md
+# Impact - <short slug>
+Verdict: cannot tell
+Signal: no queryable trail for this finding.
+Query: n/a - nothing durable to select.
+Read: theoretical impact only, see issue.md.
+Limits: no DB or log signature.
+```
 
 ## `plan.md`
 

@@ -18,7 +18,7 @@ Capture any **security report ID** (ticket, email subject id, internal code) at 
 
 ## Known issue match (report-specific)
 
-When **\_shared.md** finds a match (in security-repo `internal/`, on GitHub, or both): **`reply.md` only**. Cite prior triage folder path and/or existing GitHub issue URL/number and status. Note duplicates are generally not eligible for a separate bounty per SECURITY.md; **do not promise payment**. Do **not** offer to file a new opencollective-security issue.
+When **\_shared.md** finds a match (in security-repo `internal/`, on GitHub, or both): **`reply.md` only**. Cite the existing GitHub issue URL/number and status when one exists; otherwise state the finding was previously reported and tracked, without pasting internal triage folder paths (reporters have no access — keep folder paths in the in-chat summary only). Note duplicates are generally not eligible for a separate bounty per SECURITY.md; **do not promise payment**. Do **not** offer to file a new opencollective-security issue.
 
 ## Full triage workflow
 
@@ -28,7 +28,7 @@ When **\_shared.md** finds a match (in security-repo `internal/`, on GitHub, or 
 2. **Contributor reply** - Professional, paste-ready **`reply.md`** (templates below). Apply **Report ID** when bounty/expense applies.
 3. **Policy compliance** (fully confirmed + possible bounty) - Walk SECURITY.md Eligibility, Responsible Disclosure, and Scope. Flag gaps (missing policy sentence, production-only testing, scanner-only, hypothetical without PoC). Verdict: **recommended** / **not eligible** / **needs more info**. **Do not promise payment.**
 4. **Bounty recommendation** - If eligible, map to Rewards table (project type, Low/Medium/High/Critical band). Note sanctions/payment-processor limits if relevant. Expense: `https://opencollective.com/ofitech/expenses/new` with report ID (see **Report ID**).
-5. **`issue.md`** - Only when **fully confirmed** (PoC run). GitHub body for opencollective-security: report ID, title suggestion, summary, impact, components, code refs, PoC path/run instructions, severity, label hints. Engineering handoff, not a copy of the email.
+5. **`issue.md`** - Only when **fully confirmed** (PoC run). GitHub body for opencollective-security: report ID, title suggestion, summary, impact (+ short live exploitation check per **\_shared.md**), components, code refs, PoC path/run instructions, severity, label hints. Engineering handoff, not a copy of the email.
 6. **End-of-triage offers** - After in-chat summary, offer production impact analysis and GitHub issue filing (see below). Do not run either by default.
 
 ## Output files
@@ -40,11 +40,25 @@ All under `opencollective-security/internal/<unique-folder>/` (security repo che
 | `reply.md`  | **Always**                    | Paste-ready researcher reply: verdict, thanks, bounty/expense when applicable (see **Report ID**). State provisional clearly if PoC not run. |
 | `issue.md`  | **Fully confirmed only**      | opencollective-security issue body (see workflow step 5).                                                                                    |
 | `plan.md`   | **Fix to plan**               | Per **\_shared.md**.                                                                                                                         |
-| `impact.md` | **User accepts impact offer** | Per **\_shared.md**. Do not create during default triage.                                                                                    |
+| `impact.md` | **User accepts impact offer (dashboard harness: always)** | Per **\_shared.md** (single live check). Do not create during default chat triage. Dashboard automation mode must always write it.                                                                                    |
 
 ## Reply templates (adapt; keep accurate and kind)
 
-**Known issue / duplicate** - Thanks; prior triage (`opencollective-security/internal/…`) and/or known GitHub issue + link/number/status; duplicates generally not eligible for separate bounty; invite follow-up if they believe it is a distinct flaw; optional report ID for correlation.
+**Format:** Start `reply.md` directly with the greeting (`Hi …,` / `Hello …,`). Do **not** add a subject line at the top — no `Subject: …` line and no `# Re: …` heading; the subject is set automatically when the reply is sent.
+
+**Length:** Keep replies short. Existing effective replies cluster at **~90–180 words** (hard max ~220 even with bounty/policy nuance). Median triage output drifts to ~250 words, which is too long. Structure:
+
+1. Thanks (1 sentence, incl. responsible-testing note when true).
+2. Bold verdict line (`**Verdict: …**`).
+3. What was validated in 1–2 sentences, plain language — no code blocks, no `file.ts:line` dumps, no CVSS vectors, no fingerprint strings.
+4. Bounty/expense + **Report ID** only when applicable (one block: amount, expense URL, report ID).
+5. One-line follow-up invite (reply to thread or security@opencollective.com).
+
+Move full source-to-sink traces, PoC output, severity reasoning, and fingerprints to `issue.md`, never the reply.
+
+**Internal artifacts:** Never mention internal verification details in `reply.md` — no triage folder paths, no `poc/` / `poc.js` paths, no description of how the PoC was run gate-by-gate. Reporters have no access to those folders. One plain-language sentence max (e.g. "We reproduced this locally in a permitted environment."); verification method belongs in `issue.md`, not the reply.
+
+**Known issue / duplicate** - Thanks; existing GitHub issue link/number/status when one exists (otherwise state previously reported/tracked, no internal folder path); duplicates generally not eligible for separate bounty; invite follow-up if they believe it is a distinct flaw; optional report ID for correlation.
 
 **Invalid / non-issue** - Thanks; conclusion (cannot reproduce, not a defect, out of scope, Non-qualifying with brief rationale); point to staging/docs if helpful; no bounty unless a separate valid finding.
 
@@ -58,8 +72,9 @@ After the in-chat summary, **offer** both follow-ups below. Do not run either du
 
 When abuse may leave **queryable traces** (DB rows, audit logs, etc.).
 
-- **Offer when:** Fully or provisionally confirmed findings where forensic checks could clarify whether exploitation occurred in production.
+- **Offer when:** Fully or provisionally confirmed findings where a quick live check could clarify whether exploitation occurred in production.
 - **On accept:** Write **`impact.md`** per **\_shared.md** and note the new file in chat.
+- **Dashboard automation mode:** Skip the offer and the wait — **always write `impact.md`** (the skip note when nothing is queryable). The dashboard surfaces the file in the report drawer.
 
 ### GitHub issue
 
@@ -72,4 +87,4 @@ When abuse may leave **queryable traces** (DB rows, audit logs, etc.).
 
 **Duplicate path:** (1) Verdict + prior triage folder and/or existing GitHub issue link (2) Search queries and why same finding (archive + GitHub) (3) Folder path + `reply.md`.
 
-**Full triage path:** (1) Duplicate check note (archive + GitHub) (2) Verdict + reason (3) Evidence + PoC if confirmed (4) Impact (theoretical; in `reply.md` / `issue.md` — not production forensic queries) (5) Severity (6) Fix plan pointer (7) Bounty eligibility/band/compliance + report ID (8) Folder path + files written + PoC path (9) **Offer** production impact analysis (`impact.md`) when queryable traces may exist (10) **Offer** opencollective-security issue when applicable — only run either after user accepts
+**Full triage path:** (1) Duplicate check note (archive + GitHub) (2) Verdict + reason (3) Evidence + PoC if confirmed (4) Impact (theoretical + short live-exploitation screen in `issue.md`; live queries stay in `impact.md`) (5) Severity (6) Fix plan pointer (7) Bounty eligibility/band/compliance + report ID (8) Folder path + files written + PoC path (9) **Offer** production impact analysis (`impact.md`) when queryable traces may exist (10) **Offer** opencollective-security issue when applicable — only run either after user accepts
