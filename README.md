@@ -34,12 +34,14 @@ cd opencollective
 ./scripts/init.sh
 ```
 
-This initializes all Open Collective projects as Git submodules and checks out the latest `origin/main` on a local `main` branch. Every subsequent run fetches and updates the projects again.
+This initializes all Open Collective projects as Git submodules and checks out the latest commit on each project's configured upstream branch. All current projects, including `opencollective-security`, track `main`. Every subsequent run fetches and updates the projects again.
+
+`opencollective-security` is private and requires GitHub access. Users without access can omit `security` from `--projects`.
 
 To clone only the projects you need (faster setup, less disk use):
 
 ```bash
-./scripts/init.sh --projects api,frontend,documentation
+./scripts/init.sh --projects api,frontend,documentation,security
 ```
 
 Use short names (`api`, `frontend`, `documentation`, …) or full directory names (`opencollective-api`). Only selected projects are cloned or updated. Combine with `--shallow` for smaller initial clones. Run `./scripts/init.sh --help` for all options.
@@ -50,11 +52,11 @@ The devcontainer below requires the API and frontend repositories, including the
 
 Commit and push service changes from the service's own directory. Submodules use `ignore = all`, so edits, commits, and branch switches inside them do not appear as changes in the workspace repository. Explicitly staged submodule commit pointers still appear and can be committed.
 
-Rerunning `init.sh` switches selected projects back to `main` and fast-forwards them to the latest `origin/main`. Feature branches remain available. If a project has uncommitted changes or commits on `main` that are not on `origin/main`, the script preserves that work, reports an error, and continues updating the other projects. It exits with a nonzero status if any project fails. Commit or stash uncommitted changes, or reconcile local `main` commits, before retrying.
+Rerunning `init.sh` switches selected projects back to their configured upstream branch and fast-forwards them to its latest commit. Feature branches remain available. If a project has uncommitted changes or commits on its configured branch that are not on the remote, the script preserves that work, reports an error, and continues updating the other projects. It exits with a nonzero status if any project fails. Commit or stash uncommitted changes, or reconcile unpublished commits, before retrying.
 
 Existing repositories cloned by older versions of the setup script are adopted as submodules automatically. The script does not stage updated submodule commit pointers in the workspace.
 
-Git records a commit pointer for each submodule, but the setup script intentionally follows the latest `main` rather than those recorded commits. Plain `git submodule update --init` uses the recorded commits and usually leaves a detached HEAD; use `./scripts/init.sh` for this development workflow.
+Git records a commit pointer for each submodule, but the setup script intentionally follows the latest configured upstream branch rather than those recorded commits. Plain `git submodule update --init` uses the recorded commits and usually leaves a detached HEAD; use `./scripts/init.sh` for this development workflow.
 
 ### 2. Open in VS Code with DevContainer (Recommended)
 

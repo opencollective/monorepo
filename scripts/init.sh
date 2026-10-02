@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Open Collective Development Environment Setup Script
-# Clone or update Open Collective submodules to the latest origin/main.
+# Clone or update Open Collective submodules to the latest configured upstream branch.
 
 set -e  # Exit on any error
 
@@ -58,30 +58,32 @@ resolve_project() {
     return 1
 }
 
-# Fetch every time, but never discard local work to reach origin/main.
+# Fetch every time, but never discard local work to reach the configured upstream branch.
 init_repo() {
     local name="$1"
     local path="$2"
+    local branch="$3"
+    local remote_branch="origin/$branch"
     local -a clone_args=()
     local changes
 
     git submodule init -- "$path" || return 1
-    git config "submodule.$name.branch" main || return 1
+    git config "submodule.$name.branch" "$branch" || return 1
     git config "submodule.$name.ignore" all || return 1
 
     if [ ! -e "$path/.git" ]; then
         if [ "$SHALLOW_CLONE" = "true" ]; then
-            # Submodule cloning follows remote HEAD; include main even if HEAD differs.
+            # Submodule cloning follows remote HEAD; include the configured branch even if HEAD differs.
             clone_args+=(--depth 1 --no-single-branch)
         fi
         git submodule update --init --remote --checkout "${clone_args[@]}" -- "$path" || return 1
     fi
 
-    # Explicitly fetch main even if this checkout only tracks another branch.
+    # Explicitly fetch the configured branch even if this checkout only tracks another branch.
     git -C "$path" config --replace-all remote.origin.fetch \
-        '+refs/heads/main:refs/remotes/origin/main' '^\+?refs/heads/main:' || return 1
+        "+refs/heads/$branch:refs/remotes/origin/$branch" "^\+?refs/heads/$branch:" || return 1
     git -C "$path" fetch --no-recurse-submodules origin \
-        '+refs/heads/main:refs/remotes/origin/main' || return 1
+        "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1
 
     changes=$(git -C "$path" status --porcelain) || return 1
     if [ -n "$changes" ]; then
@@ -89,19 +91,19 @@ init_repo() {
         return 1
     fi
 
-    if git -C "$path" show-ref --verify --quiet refs/heads/main; then
-        if ! git -C "$path" merge-base --is-ancestor main origin/main; then
-            print_error "$path has local commits on main that are not on origin/main. Move or reconcile them, then rerun init."
+    if git -C "$path" show-ref --verify --quiet "refs/heads/$branch"; then
+        if ! git -C "$path" merge-base --is-ancestor "$branch" "$remote_branch"; then
+            print_error "$path has local commits on $branch that are not on $remote_branch. Move or reconcile them, then rerun init."
             return 1
         fi
-        git -C "$path" switch main || return 1
+        git -C "$path" switch "$branch" || return 1
     else
-        git -C "$path" switch --create main --track origin/main || return 1
+        git -C "$path" switch --create "$branch" --track "$remote_branch" || return 1
     fi
 
-    git -C "$path" merge --ff-only origin/main || return 1
-    git -C "$path" branch --set-upstream-to=origin/main main || return 1
-    print_success "$path is up to date on main"
+    git -C "$path" merge --ff-only "$remote_branch" || return 1
+    git -C "$path" branch --set-upstream-to="$remote_branch" "$branch" || return 1
+    print_success "$path is up to date on $branch"
 }
 
 # Main execution
@@ -132,8 +134,8 @@ main() {
                 echo "                         Use short names (api, frontend) or full directory names (opencollective-api)"
                 echo "  -h, --help             Show this help message"
                 echo ""
-                echo "Every run fetches and checks out the latest origin/main for selected projects."
-                echo "Uncommitted changes or unpublished commits on main cause an error; local work is preserved."
+                echo "Every run fetches and checks out the latest configured upstream branch for selected projects."
+                echo "Uncommitted changes or unpublished commits on a configured branch cause an error; local work is preserved."
                 exit 0
                 ;;
             *)
@@ -150,7 +152,7 @@ main() {
         print_status "Shallow cloning mode enabled"
     fi
     
-    # Repository list comes from .gitmodules (name + path per submodule)
+    # Repository list comes from .gitmodules (name, path, and branch per submodule)
     local GITMODULES="$PROJECT_ROOT/.gitmodules"
     if [ ! -f "$GITMODULES" ]; then
         print_error ".gitmodules not found at $GITMODULES"
@@ -158,12 +160,14 @@ main() {
     fi
     
     local -a repositories=()
-    local line name path
+    local line name path branch
     while IFS= read -r line; do
         [[ "$line" =~ ^submodule\.([^=]+)\.path=(.*)$ ]] || continue
         name="${BASH_REMATCH[1]}"
         path="${BASH_REMATCH[2]}"
-        repositories+=("$name" "$path")
+        branch=$(git config -f "$GITMODULES" --get "submodule.$name.branch" || true)
+        branch="${branch:-main}"
+        repositories+=("$name" "$path" "$branch")
     done < <(git config -f "$GITMODULES" -l | grep '^submodule\..*\.path=')
     
     if [ "${#repositories[@]}" -eq 0 ]; then
@@ -172,7 +176,7 @@ main() {
     fi
 
     local -a ALL_PROJECT_PATHS=()
-    for ((i=1; i<${#repositories[@]}; i+=2)); do
+    for ((i=1; i<${#repositories[@]}; i+=3)); do
         ALL_PROJECT_PATHS+=("${repositories[i]}")
     done
 
@@ -216,14 +220,15 @@ main() {
         selected_paths=("${deduped[@]}")
 
         local -a filtered=()
-        for ((i=0; i<${#repositories[@]}; i+=2)); do
+        for ((i=0; i<${#repositories[@]}; i+=3)); do
             local repo_name="${repositories[i]}"
             local repo_path="${repositories[i+1]}"
+            local repo_branch="${repositories[i+2]}"
             local include=false
             for path in "${selected_paths[@]}"; do
                 [ "$path" = "$repo_path" ] && include=true && break
             done
-            [ "$include" = true ] && filtered+=("$repo_name" "$repo_path")
+            [ "$include" = true ] && filtered+=("$repo_name" "$repo_path" "$repo_branch")
         done
         repositories=("${filtered[@]}")
         print_status "Initializing/updating selected projects only: ${selected_paths[*]}"
@@ -236,17 +241,18 @@ main() {
     
     # Initialize/update repositories, continuing after individual failures.
     local failed_repos=()
-    local total_repos=${#repositories[@]}
+    local total_repos=$((${#repositories[@]} / 3))
     local processed=0
     
-    for ((i=0; i<total_repos; i+=2)); do
+    for ((i=0; i<${#repositories[@]}; i+=3)); do
         local repo_name="${repositories[i]}"
         local repo_path="${repositories[i+1]}"
+        local repo_branch="${repositories[i+2]}"
         
         processed=$((processed + 1))
         
-        print_status "Processing repository $(printf "%02d" $processed)/$(printf "%02d" $((total_repos/2))): $repo_path"
-        if ! init_repo "$repo_name" "$repo_path"; then
+        print_status "Processing repository $(printf "%02d" "$processed")/$(printf "%02d" "$total_repos"): $repo_path"
+        if ! init_repo "$repo_name" "$repo_path" "$repo_branch"; then
             print_error "Failed to initialize/update $repo_path"
             failed_repos+=("$repo_path")
         fi
@@ -256,7 +262,7 @@ main() {
     echo "================================================="
 
     if [ ${#failed_repos[@]} -eq 0 ]; then
-        print_success "All selected repositories are up to date on main!"
+        print_success "All selected repositories are up to date on their configured branches!"
     else
         print_warning "Some repositories failed to initialize/update:"
         for repo in "${failed_repos[@]}"; do

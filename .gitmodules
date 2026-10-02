@@ -44,3 +44,8 @@
 	branch = main
 	ignore = all
 
+[submodule "opencollective-security"]
+	path = opencollective-security
+	url = git@github.com:opencollective/opencollective-security.git
+	branch = main
+	ignore = all

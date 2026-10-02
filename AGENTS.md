@@ -40,4 +40,4 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 
 ## Security
 
-Triage: `.agents/skills/security-investigate-issue` (internal), `security-investigate-report`. Known-safe patterns: `.agents/skills/review-feature-security`. **Not defects:** public GraphQL introspection, permissive API CORS.
+Internal issues are tracked in `opencollective-security`. Triage: `.agents/skills/security-investigate-issue` (internal), `security-investigate-report`. Known-safe patterns: `.agents/skills/review-feature-security`. **Not defects:** public GraphQL introspection, permissive API CORS.
