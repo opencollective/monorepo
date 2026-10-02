@@ -4,6 +4,4 @@ priv/*
 package-lock.json
 opencode.json
 .opencode
-opencollective
-opencollective-*
 .worktrees

@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Create logs directory if it doesn't exist
-mkdir -p logs
+mkdir -p priv/logs
 
 # Function to generate PM2 config
 generate_pm2_config() {
@@ -110,9 +110,7 @@ generate_pm2_config() {
       \"cwd\": \"./$service_dir\",
       \"script\": \"npm\",
       \"args\": \"$npm_args\",
-      \"log_file\": \"../logs/$service_name.log\",
-      \"out_file\": \"../logs/$service_name-out.log\",
-      \"error_file\": \"../logs/$service_name-error.log\"
+      \"log_file\": \"../priv/logs/$service_name.log\"
     }"
     done
 

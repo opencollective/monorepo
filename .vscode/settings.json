@@ -16,17 +16,7 @@
   "eslint.validate": ["javascript", "typescript", "typescriptreact"],
   "files.exclude": {
     "*.code-workspace": true,
-    "**/dist/*": true,
-    "opencollective-watch/": true,
-    "test/": true,
-    ".git-backup/": true
-    // "opencollective-documentation/*": true,
-    // "opencollective-images": true,
-    // "opencollective-pdf": true,
-    // "opencollective-rss": true,
-    // "opencollective-studies": true,
-    // "opencollective-taxes": true,
-    // "opencollective-rest": true
+    "**/dist/*": true
   },
   "search.useIgnoreFiles": false,
   "search.useParentIgnoreFiles": false,
