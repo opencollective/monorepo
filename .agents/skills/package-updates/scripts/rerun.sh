@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rerun only the failed jobs of every failed workflow run on a PR's head commit.
-# usage: rerun.sh <api|frontend|rest|images> <pr-number> [<pr-number> ...]
+# usage: rerun.sh <api|frontend|rest|images|pdf> <pr-number> [<pr-number> ...]
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 for pr in "$@"; do
   sha=$(pr_head_sha "$pr")

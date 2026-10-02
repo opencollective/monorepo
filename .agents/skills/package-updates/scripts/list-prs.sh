@@ -3,7 +3,7 @@
 # triage needs: check state, mergeability, review state, own PR, commits behind main, foreign (non-bot)
 # commits, age of the last check. REVIEW: APPR (approved) / REQ (review required, explicit approval is needed) /
 # OWN (the user's PR: can't self-approve, needs another reviewer).
-# usage: list-prs.sh <api|frontend|rest|images> [--json] [--fast]
+# usage: list-prs.sh <api|frontend|rest|images|pdf> [--json] [--fast]
 #   --fast: one API call for the whole repo (no per-PR "behind" count, no mergeability retry); for a quick status.
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift || true
 json=""; fast=""

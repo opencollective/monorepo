@@ -1,12 +1,12 @@
 ---
 name: package-updates
-description: Review and maintain dependency-update PRs (Renovate, Dependabot, and lockfile maintenance) in Open Collective api, frontend, rest, and images. Use for inventory, CI triage, retries, rebases, compatibility fixes, and authorized merges. Status and review requests remain read-only.
+description: Review and maintain dependency-update PRs (Renovate, Dependabot, and lockfile maintenance) in Open Collective api, frontend, rest, images, and pdf. Use for inventory, CI triage, retries, rebases, compatibility fixes, and authorized merges. Status and review requests remain read-only.
 ---
 
 # Package updates
 
 Maintain dependency PRs through investigation, verification, and the actions the user authorized.
-Scope is api, frontend, rest and images unless the user names a repo or PR. A review-only request produces findings;
+Scope is api, frontend, rest, images and pdf unless the user names a repo or PR. A review-only request produces findings;
 it does not authorize retries, edits to PRs, pushes, or merges. Reviewing this skill's own files does
 not start maintenance on live PRs.
 
