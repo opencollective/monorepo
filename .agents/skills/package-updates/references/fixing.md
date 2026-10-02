@@ -66,7 +66,7 @@ Remove only task-owned worktrees after their work is safely pushed or explicitly
 | Tests  | `NODE_ENV=test TZ=UTC npx mocha <touched suites>` (needs local Postgres)                                 | `npm run test:jest`; `npm run graphql:codegen` must produce zero diff when codegen packages moved |
 | Extra  | `npm run depcheck`, `npm run ts-unused-exports` when deps were added/removed                             | `npm run langs:check` if i18n touched                                                             |
 
-rest and images: the quality commands and the live-API test caveats are in `repo-facts.md`; images has no
+rest, images and pdf: the quality commands and the test caveats are in `repo-facts.md`; images has no
 type check, so `npm run build` plus the Jest suite against a running API is the whole verification.
 
 Green CI can hide a broken PR (a migration commit that dropped layout logic; generated types never regenerated). When an agent wrote the migration, regenerate artefacts and look at the UI if it is visual.

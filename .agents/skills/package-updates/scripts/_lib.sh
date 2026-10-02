@@ -3,7 +3,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-# Map a short repo name (api|frontend|rest|images) or a full slug to owner/repo and a local checkout.
+# Map a short repo name (api|frontend|rest|images|pdf) or a full slug to owner/repo and a local checkout.
 # The local checkout is only used for worktrees (never touched directly): the monorepo
 # submodule dir first, then ~/Dev/opencollective/<short>.
 resolve_repo() {
@@ -13,7 +13,8 @@ resolve_repo() {
     frontend|opencollective-frontend|opencollective/opencollective-frontend) REPO=opencollective/opencollective-frontend; SHORT=frontend ;;
     rest|opencollective-rest|opencollective/opencollective-rest) REPO=opencollective/opencollective-rest; SHORT=rest ;;
     images|opencollective-images|opencollective/opencollective-images) REPO=opencollective/opencollective-images; SHORT=images ;;
-    *) echo "usage: $(basename "$0") <api|frontend|rest|images> ..." >&2; exit 2 ;;
+    pdf|opencollective-pdf|opencollective/opencollective-pdf) REPO=opencollective/opencollective-pdf; SHORT=pdf ;;
+    *) echo "usage: $(basename "$0") <api|frontend|rest|images|pdf> ..." >&2; exit 2 ;;
   esac
   LOCAL_REPO=""
   for d in "$skill_root/opencollective-$SHORT" "$HOME/Dev/opencollective/$SHORT"; do
