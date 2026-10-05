@@ -22,6 +22,10 @@ BACKEND_FILE="$SCRIPT_DIR/backends/$WORKSPACE_BACKEND.sh"
 # shellcheck source=backends/incus.sh
 source "$BACKEND_FILE"
 
+workspace_result_schema() {
+    [[ "${ORCA_RECIPE_RESULT_SCHEMA_VERSION:-}" == 2 ]] || workspace_error 'provisioned-root requires ORCA_RECIPE_RESULT_SCHEMA_VERSION=2; no VM operation was performed'
+}
+
 workspace_state() {
     mkdir -p "$WORKSPACE_STATE_DIR/instances" "$WORKSPACE_STATE_DIR/locks" "$WORKSPACE_STATE_DIR/ssh/hosts"
     chmod 700 "$WORKSPACE_STATE_DIR"
@@ -57,7 +61,8 @@ workspace_record() {
 workspace_payload() {
     local payload
     payload=$(cat)
-    jq -e --arg action "$ACTION" '.schemaVersion == 1 and .mode == $action and (.instanceId | type == "string")' \
+    jq -e --arg action "$ACTION" '.schemaVersion == 1 and .mode == $action and (.instanceId | type == "string") and
+        ($action != "resume" or (.recipeResult.schemaVersion == 2 and .recipeResult.checkoutMode == "provisioned-root"))' \
         <<<"$payload" >/dev/null || workspace_error 'Invalid Orca lifecycle payload'
     INSTANCE_ID=$(jq -r '.instanceId' <<<"$payload")
     workspace_lock "$INSTANCE_ID"
@@ -138,7 +143,7 @@ EOF
         --arg identity "$folder/id_ed25519" --argjson port "$WORKSPACE_SSH_PORT" \
         '{schemaVersion:2,checkoutMode:"provisioned-root",connection:{type:"ssh",projectRoot:$root,
         target:{label:$alias,configHost:$alias,host:$host,port:$port,username:$user,
-        identityFile:$identity,identityAgent:"none",identitiesOnly:true,relayGracePeriodSeconds:300}},
+        identityFile:$identity,identityAgent:"none",identitiesOnly:true}},
         userData:{provider:$provider,instanceId:$id,owner:$owner}}'
 }
 
@@ -158,6 +163,7 @@ workspace_cleanup_failed() {
 
 workspace_create() (
     local id=${ORCA_VM_INSTANCE_ID:-} folder handle root result request
+    workspace_result_schema
     [[ -n "$id" ]] || workspace_error 'Create requires Orca context; use smoke for a standalone lifecycle check'
     workspace_lock "$id"
     folder="$WORKSPACE_STATE_DIR/instances/$id"
@@ -175,7 +181,7 @@ workspace_create() (
     fi
     [[ ! -d "$folder" ]] || workspace_error 'Incomplete creation exists; destroy it before retrying'
     [[ -n "${ORCA_REPO_URL:-}" && -n "${ORCA_REPO_BRANCH:-}" && -n "${ORCA_REPO_REF:-}" &&
-        "${ORCA_REPO_REF_HEAD:-}" =~ ^[a-fA-F0-9]{40,64}$ ]] || workspace_error 'Missing provisioned-root checkout context (doctor --provision does not supply it); use smoke'
+        "${ORCA_REPO_REF_HEAD:-}" =~ ^[a-fA-F0-9]{40,64}$ ]] || workspace_error 'Missing pinned provisioned-root checkout context; run from Orca or use smoke'
     git check-ref-format --branch "$ORCA_REPO_BRANCH" >/dev/null
     [[ "$ORCA_REPO_REF" != -* ]] || workspace_error 'Invalid requested ref'
     exec 7>"$WORKSPACE_STATE_DIR/locks/allocation.lock"
@@ -300,11 +306,12 @@ Usage: workspace.sh [--config FILE] COMMAND [ARGUMENT]
   status                       Resource, storage and registry report
   grow-pool GIB                Increase the backing-file capacity ceiling
   trim                         Run guest TRIM and report storage (does not lower capacity)
-  doctor [PATH]                Check host, installed Orca contract and recipe
+  doctor [PATH]                Check installed Orca contract and static recipe wiring
   smoke                        Real-host SSH, lifecycle and isolation smoke test
 EOF
         ;;
     host-check) backend_check ;;
+    doctor) "$SCRIPT_DIR/orca-doctor.sh" "${1:-$PWD}" ;;
     *)
         workspace_state
         case "$ACTION" in
@@ -319,6 +326,7 @@ EOF
                 ;;
             create) workspace_create ;;
             suspend | resume | destroy)
+                if [[ "$ACTION" == resume && -v ORCA_RECIPE_RESULT_SCHEMA_VERSION ]]; then workspace_result_schema; fi
                 if [[ "$ACTION" == destroy && -n "${1:-}" ]]; then
                     INSTANCE_ID=$1
                     workspace_lock "$INSTANCE_ID"
@@ -347,12 +355,6 @@ EOF
             status) backend_status ;;
             grow-pool) backend_grow "${1:-}" ;;
             trim) backend_trim ;;
-            doctor)
-                backend_check
-                workspace_require orca-ide
-                orca-ide skills get orca-per-workspace-env --json
-                orca-ide vm recipe doctor workspace-vm --repo-path "${1:-$PWD}" --json
-                ;;
             smoke) "$SCRIPT_DIR/smoke.sh" "$CONFIG_FILE" "$@" ;;
             *) workspace_error "Unknown command: $ACTION" ;;
         esac

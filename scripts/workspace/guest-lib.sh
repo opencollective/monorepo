@@ -83,6 +83,22 @@ normalize_repo_url() {
     printf '%s\n' "${url%.git}"
 }
 
+verify_project_checkout() {
+    local repo=$1 branch=$2 head=$3 sparse git_dir common_dir
+    [[ $(as_developer git -C "$repo" rev-parse --show-toplevel) == "$repo" &&
+    $(as_developer git -C "$repo" rev-parse --is-bare-repository) == false ]] || guest_error 'Orca requires an ordinary primary checkout at projectRoot'
+    if sparse=$(as_developer git -C "$repo" config --bool core.sparseCheckout); then
+        [[ "$sparse" != true ]] || guest_error 'Orca provisioned-root does not support sparse checkouts'
+    else
+        [[ $? == 1 ]] || guest_error 'Cannot read checkout configuration'
+    fi
+    git_dir=$(as_developer git -C "$repo" rev-parse --absolute-git-dir)
+    common_dir=$(as_developer git -C "$repo" rev-parse --path-format=absolute --git-common-dir)
+    [[ "$git_dir" == "$common_dir" ]] || guest_error 'Orca provisioned-root requires a primary checkout, not a linked worktree'
+    [[ $(as_developer git -C "$repo" rev-parse HEAD) == "$head" &&
+    $(as_developer git -C "$repo" symbolic-ref --short HEAD) == "$branch" ]] || guest_error 'Checkout does not match the requested branch and pinned commit'
+}
+
 refresh_repositories() {
     local root=$WORKSPACE_GUEST_ROOT
     if [[ ! -d "$root/.git" ]]; then

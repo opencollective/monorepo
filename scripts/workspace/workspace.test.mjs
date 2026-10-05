@@ -34,6 +34,7 @@ function fixture(t, settings = "") {
     HOME: dir,
     FAKE_DIR: join(dir, "fake"),
     PATH: `${dir}/bin:${env.PATH}`,
+    ORCA_RECIPE_RESULT_SCHEMA_VERSION: "2",
   });
   writeFileSync(
     join(dir, "bin/ssh"),
@@ -163,6 +164,194 @@ test("creation failures clean allocation and private SSH files", (t) => {
     assert.equal(existsSync(join(f.dir, "fake/orca-test-one")), false);
     passed(f.create());
   }
+});
+
+test("create rejects absent or unsupported result schemas before VM allocation", (t) => {
+  const f = fixture(t);
+  for (const version of ["", "1", "3"]) {
+    const r = f.create({ ORCA_RECIPE_RESULT_SCHEMA_VERSION: version });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /requires ORCA_RECIPE_RESULT_SCHEMA_VERSION=2/);
+    assert.equal(existsSync(join(f.dir, "fake/events")), false);
+  }
+  passed(f.create());
+});
+
+test("resume rejects an incompatible saved result before touching the VM", (t) => {
+  const f = fixture(t);
+  const created = f.create();
+  passed(created);
+  const result = JSON.parse(created.stdout);
+  const events = f.events();
+  const r = f.run("resume", {
+    input: f.payload("resume", { ...result, schemaVersion: 1 }),
+  });
+  assert.notEqual(r.status, 0);
+  assert.equal(f.events(), events);
+});
+
+test("portable recipe delegates lifecycle input and context to the installed host code", (t) => {
+  const f = fixture(t);
+  const beforeInstall = spawnSync(
+    "bash",
+    [join(f.dir, "scripts/recipe.sh"), "--config", f.config, "create"],
+    { env: f.env, encoding: "utf8" },
+  );
+  assert.notEqual(beforeInstall.status, 0);
+  assert.match(beforeInstall.stderr, /installation is missing/);
+  passed(f.run("install"));
+  // The installation remains usable after the checkout's provider is removed.
+  rmSync(join(f.dir, "scripts/backends/fake.sh"));
+  const invoke = (action, input) =>
+    spawnSync(
+      "bash",
+      [join(f.dir, "scripts/recipe.sh"), "--config", f.config, action],
+      {
+        env: {
+          ...f.env,
+          ORCA_VM_INSTANCE_ID: "orca-test-one",
+          ORCA_REPO_URL: "https://github.com/opencollective/opencollective-api",
+          ORCA_REPO_BRANCH: "test-branch",
+          ORCA_REPO_REF: "refs/heads/main",
+          ORCA_REPO_REF_HEAD: "a".repeat(40),
+        },
+        input,
+        encoding: "utf8",
+      },
+    );
+  const created = invoke("create");
+  passed(created);
+  const result = JSON.parse(created.stdout);
+  assert.equal(result.schemaVersion, 2);
+  passed(invoke("suspend", f.payload("suspend", result)));
+  passed(invoke("resume", f.payload("resume", result)));
+  passed(invoke("destroy", f.payload("destroy", result)));
+  assert.equal(existsSync(join(f.dir, "fake/orca-test-one")), false);
+});
+
+function fakeOrca(f, executable = "orca-ide") {
+  const path = join(f.dir, "bin", executable);
+  writeFileSync(
+    path,
+    [
+      "#!/bin/bash",
+      "set -euo pipefail",
+      'printf "%s\\n" "$*" >> "$FAKE_DIR/orca-events"',
+      'if [[ "$1 $2" == "skills get" ]]; then',
+      '  printf \'{"name":"orca-per-workspace-env","markdown":"matched-guide"}\\n\'',
+      'elif [[ "$1 $2 $3" == "vm recipe doctor" ]]; then',
+      '  printf "%s\\n" "$FAKE_ORCA_REPORT"',
+      '  exit "$FAKE_ORCA_EXIT"',
+      "else exit 91; fi",
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return path;
+}
+
+test("doctor is static, uses the selected CLI and rejects warnings even with ok:true", (t) => {
+  const f = fixture(t);
+  fakeOrca(f);
+  for (const status of ["pass", "warn", "fail"]) {
+    const report = { ok: true, checks: [{ status }] };
+    const r = f.run("doctor", {
+      args: [f.dir],
+      extra: { FAKE_ORCA_REPORT: JSON.stringify(report), FAKE_ORCA_EXIT: "0" },
+    });
+    assert.equal(r.status === 0, status === "pass", r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), report);
+  }
+  assert.equal(existsSync(join(f.dir, "state")), false);
+  assert.equal(existsSync(join(f.dir, "fake/events")), false);
+  assert.doesNotMatch(
+    readFileSync(join(f.dir, "fake/orca-events"), "utf8"),
+    /--provision|--connect/,
+  );
+  const custom = fakeOrca(f, "custom-orca");
+  passed(
+    f.run("doctor", {
+      extra: {
+        ORCA_CLI_COMMAND: custom,
+        FAKE_ORCA_REPORT: '{"ok":true,"checks":[]}',
+        FAKE_ORCA_EXIT: "0",
+      },
+    }),
+  );
+  fakeOrca(f, "orca-dev");
+  passed(
+    f.run("doctor", {
+      extra: {
+        ORCA_DEV_REPO_ROOT: f.dir,
+        FAKE_ORCA_REPORT: '{"ok":true,"checks":[]}',
+        FAKE_ORCA_EXIT: "0",
+      },
+    }),
+  );
+});
+
+test("doctor preserves CLI failure details and never switches to another executable", (t) => {
+  const f = fixture(t);
+  fakeOrca(f);
+  const failed = f.run("doctor", {
+    extra: {
+      FAKE_ORCA_REPORT: '{"ok":false,"checks":[{"status":"fail"}]}',
+      FAKE_ORCA_EXIT: "7",
+    },
+  });
+  assert.equal(failed.status, 7);
+  assert.match(failed.stderr, /Orca command failed.*exit 7/);
+  assert.equal(JSON.parse(failed.stdout).ok, false);
+  const before = readFileSync(join(f.dir, "fake/orca-events"), "utf8");
+  const missing = f.run("doctor", {
+    extra: { ORCA_CLI_COMMAND: join(f.dir, "missing-orca") },
+  });
+  assert.equal(missing.status, 127);
+  assert.match(missing.stderr, /missing-orca.*No such file or directory/);
+  assert.equal(readFileSync(join(f.dir, "fake/orca-events"), "utf8"), before);
+});
+
+test("provisioned checkout validation rejects wrong commits, linked worktrees and sparse roots", (t) => {
+  const f = fixture(t);
+  const repo = join(f.dir, "checkout");
+  const env = {
+    ...f.env,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+  };
+  const git = (...args) => {
+    const r = spawnSync("git", args, { env, encoding: "utf8" });
+    passed(r);
+    return r.stdout.trim();
+  };
+  git("init", "-b", "main", repo);
+  git("-C", repo, "config", "user.name", "Workspace Test");
+  git("-C", repo, "config", "user.email", "workspace@example.test");
+  writeFileSync(join(repo, "README"), "fixture");
+  git("-C", repo, "add", "README");
+  git("-C", repo, "commit", "-m", "fixture");
+  const head = git("-C", repo, "rev-parse", "HEAD");
+  const verify = (path, branch = "main", commit = head) =>
+    spawnSync(
+      "bash",
+      [
+        "-c",
+        'set -euo pipefail; source "$1/guest-lib.sh"; as_developer() { "$@"; }; verify_project_checkout "$2" "$3" "$4"',
+        "bash",
+        join(f.dir, "scripts"),
+        path,
+        branch,
+        commit,
+      ],
+      { env, encoding: "utf8" },
+    );
+  passed(verify(repo));
+  assert.notEqual(verify(repo, "main", "b".repeat(40)).status, 0);
+  const linked = join(f.dir, "linked");
+  git("-C", repo, "worktree", "add", "-b", "linked", linked);
+  assert.notEqual(verify(linked, "linked").status, 0);
+  git("-C", repo, "config", "core.sparseCheckout", "true");
+  assert.notEqual(verify(repo).status, 0);
 });
 test("failed cleanup retains recoverable ownership record", (t) => {
   const f = fixture(t);

@@ -1,0 +1,8 @@
+environmentRecipes:
+  - id: workspace-vm
+    name: Isolated development VM
+    checkoutMode: provisioned-root
+    create: ./scripts/workspace/recipe.sh create
+    suspend: ./scripts/workspace/recipe.sh suspend
+    resume: ./scripts/workspace/recipe.sh resume
+    destroy: ./scripts/workspace/recipe.sh destroy

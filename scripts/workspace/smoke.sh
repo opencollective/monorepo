@@ -31,6 +31,7 @@ head=$(git ls-remote "$WORKSPACE_REPO_URL" "refs/heads/$WORKSPACE_REPO_BRANCH" |
 [[ "$head" =~ ^[a-f0-9]{40,64}$ ]] || workspace_error 'Could not resolve smoke checkout'
 export ORCA_REPO_URL=$WORKSPACE_REPO_URL ORCA_REPO_BRANCH="smoke-${one: -8}"
 export ORCA_REPO_REF="refs/heads/$WORKSPACE_REPO_BRANCH" ORCA_REPO_REF_HEAD=$head
+export ORCA_RECIPE_RESULT_SCHEMA_VERSION=2
 "${CLI[@]}" status >"$temp/before.json"
 if [[ "${2:-}" == --grow-pool ]]; then
     "${CLI[@]}" grow-pool "$3"
@@ -47,6 +48,18 @@ a=$(jq -r .connection.target.configHost "$temp/one.json")
 b=$(jq -r .connection.target.configHost "$temp/two.json")
 ip_b=$(jq -r .connection.target.host "$temp/two.json")
 SSH=(ssh -F "$WORKSPACE_STATE_DIR/ssh/config" -o BatchMode=yes -o ConnectTimeout=10)
+# Exercise the primary checkout and selected binaries over the emitted SSH alias,
+# rather than relying only on the provider's management channel.
+IFS=, read -r -a agent_tools <<<"$WORKSPACE_AGENT_TOOLS"
+for result_file in "$temp/one.json" "$temp/two.json"; do
+    alias=$(jq -er .connection.target.configHost "$result_file")
+    root=$(jq -er .connection.projectRoot "$result_file")
+    printf -v checkout_check 'bash -c %q bash %q %q %q' \
+        'set -euo pipefail; cd "$1"; test "$(pwd -P)" = "$1"; test "$(git rev-parse HEAD)" = "$2"; test "$(git symbolic-ref --short HEAD)" = "$3"; shift 3; for tool in "$@"; do command -v "$tool" >/dev/null; done' \
+        "$root" "$head" "$ORCA_REPO_BRANCH"
+    for tool in "${agent_tools[@]}"; do printf -v checkout_check '%s %q' "$checkout_check" "$tool"; done
+    "${SSH[@]}" "$alias" "$checkout_check"
+done
 [[ $("${SSH[@]}" "$a" cat /etc/machine-id) != "$("${SSH[@]}" "$b" cat /etc/machine-id)" ]] || workspace_error 'Machine IDs match'
 [[ $("${SSH[@]}" "$a" cat /etc/ssh/ssh_host_ed25519_key.pub) != "$("${SSH[@]}" "$b" cat /etc/ssh/ssh_host_ed25519_key.pub)" ]] || workspace_error 'SSH host keys match'
 [[ $(jq -r .connection.target.identityFile "$temp/one.json") != "$(jq -r .connection.target.identityFile "$temp/two.json")" ]] || workspace_error 'Client identities match'
@@ -106,5 +119,15 @@ payload resume | "${CLI[@]}" resume >"$temp/resumed.json"
 jq -e --slurpfile written "$temp/written.json" \
     '(.storage.thinPool.data_percent|tonumber) < ($written[0].storage.thinPool.data_percent|tonumber) and .storage.allocatedBytes < $written[0].storage.allocatedBytes' \
     "$temp/trimmed.json" >/dev/null || workspace_error 'TRIM did not reclaim both thin-pool blocks and host file allocation; inspect discard support before activation'
+# Confirm provider removal and managed identity cleanup before reporting success.
+"${CLI[@]}" destroy "$one" >&2
+"${CLI[@]}" destroy "$two" >&2
+"${CLI[@]}" status >"$temp/destroyed.json"
+jq -e --arg one "$one" --arg two "$two" \
+    '[.instances[] | select(.instanceId == $one or .instanceId == $two)] | length == 0' \
+    "$temp/destroyed.json" >/dev/null || workspace_error 'Destroyed workspace VMs still exist'
+for id in "$one" "$two"; do
+    [[ ! -e "$WORKSPACE_STATE_DIR/instances/$id" && ! -e "$WORKSPACE_STATE_DIR/ssh/hosts/$id" ]] || workspace_error 'Destroyed workspace SSH/state files remain'
+done
 jq -n --argjson first "$one_seconds" --argjson second "$two_seconds" --slurpfile before "$temp/before.json" --slurpfile after "$temp/after.json" \
     '{passed:true,startupSeconds:[$first,$second],allocatedBytesBefore:$before[0].storage.allocatedBytes,allocatedBytesAfter:$after[0].storage.allocatedBytes,incrementalAllocatedBytes:($after[0].storage.allocatedBytes-$before[0].storage.allocatedBytes)}'

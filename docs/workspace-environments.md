@@ -18,12 +18,13 @@ Install the `orca-ide` CLI shipped with your Orca version. No host Docker is nee
 ```bash
 cp .env.workspace.example .env.workspace.local
 # Edit literal settings and absolute credential paths before continuing.
+# Check wiring and prerequisites before allocating any VM or storage.
+./scripts/workspace/workspace.sh doctor "$PWD"
 ./scripts/workspace/workspace.sh host-check
 ./scripts/workspace/workspace.sh setup
 ./scripts/workspace/workspace.sh install
 ./scripts/workspace/build-golden-image.sh
-./scripts/workspace/workspace.sh register-project "$PWD"
-./scripts/workspace/workspace.sh doctor "$PWD"
+# The monorepo already declares workspace-vm in orca.yaml.
 
 # Use a known live LAN/VPN endpoint; the smoke checks host reachability first.
 WORKSPACE_SMOKE_LAN_IP=192.168.1.10 WORKSPACE_SMOKE_LAN_PORT=22 \
@@ -152,19 +153,29 @@ for recipes; changing a checkout does not change an already-registered lifecycle
 Protect the installation/state directories from agents; they are host-local and
 are never mounted into guests.
 
-`register-project` writes a local `orca.yaml` with a `workspace-vm` recipe, using
-`checkoutMode: provisioned-root`. It adds `/orca.yaml` to that repository's local
-Git exclude. Register the monorepo or each service's primary checkout, for example
-`register-project "$PWD/opencollective-api"`. Existing `orca.yaml` files are left
-for manual merging; the recipe contains `create`, `suspend`, `resume`, `destroy`
-commands invoking the installed dispatcher. All lifecycle progress goes to stderr;
-create/resume emit a single schema-version-2 SSH result.
+The monorepo's tracked `orca.yaml` declares the `workspace-vm` recipe with
+`checkoutMode: provisioned-root`. Its portable `recipe.sh` entry point reads the
+local configuration only to locate the installed host dispatcher, then delegates
+create, suspend, resume and destroy without changing stdin or checkout context.
+Run `install` before using the recipe; no VM operation runs from the checkout.
+
+For service projects, `register-project "$PWD/opencollective-api"` writes a local
+`orca.yaml` pointing directly at the installed dispatcher and adds `/orca.yaml`
+to that service's Git exclude. Existing recipes are left for manual merging.
+The Orca composer reads recipes from the primary checkout/branch: a recipe only
+on this feature branch will not appear in the primary project's Run on picker.
+Make the recipe available there before using the picker; the static doctor can
+check this branch before then. All lifecycle progress goes to stderr;
+create/resume emit a single schema-version-2 SSH result. Create rejects a missing
+or unsupported `ORCA_RECIPE_RESULT_SCHEMA_VERSION` before allocating a VM;
+resume requires a saved version-2 provisioned-root result.
 
 Create verifies Orca's pinned branch/commit, selects the monorepo or configured
 service root, refreshes repositories, prepares that checkout, conditionally
 installs dependencies, initializes fresh fixtures/buckets and starts services.
-The service checkout is a primary checkout; no host worktree or source mount is
-used. Each VM receives a distinct host-side Ed25519 key, `oc-orca-...` SSH alias,
+The guest verifies an ordinary, non-bare, non-sparse primary checkout at the
+requested branch and exact pinned commit; no linked worktree or host source mount
+is used. Each VM receives a distinct host-side Ed25519 key, `oc-orca-...` SSH alias,
 and guest host key obtained through Incus exec. Effective SSH configuration must
 disable agent forwarding and require strict host-key checking. If a preceding
 `Host *` overrides the Include, fix its order before creating a workspace.
@@ -195,11 +206,31 @@ Lifecycle retries are serialized per workspace. Manual recovery:
 ./scripts/workspace/workspace.sh destroy orca-INSTANCE-ID
 ```
 
-Doctor checks the installed `orca-per-workspace-env` skill and the recipe.
-Inspect its reported checks against this SSH contract. Orca doctor `--provision`
-does not supply pinned checkout context or exercise SSH and therefore cannot
-validate this provisioned-root recipe. Use the dedicated smoke, then create,
-suspend/resume and destroy a workspace through the actual Orca app.
+Doctor loads the installed `orca-per-workspace-env` guide and checks recipe wiring
+without consulting Incus, creating state directories or provisioning a VM. It uses
+`ORCA_CLI_COMMAND` when set, otherwise `orca-dev` in an `ORCA_DEV_REPO_ROOT` session,
+otherwise `orca-ide` on Linux; it never falls through to the GNOME screen reader.
+It preserves CLI errors and rejects both `fail` and `warn`, even when `ok:true`.
+Inspect and resolve those checks before live validation. If Orca reports that it
+is not running, start the same executable with `open --json` and retry. A
+`runtime_access_denied` error requires fixing runtime access, not restarting Orca.
+
+Orca doctor `--provision` exercises create/result validation/destroy and only sees
+what the scripts print; it does not prove SSH connectivity. Provisioned-root also
+needs the complete pinned checkout context; if your Orca build's doctor does not
+provide it, use the dedicated smoke, which supplies that context. Smoke separately
+dials the emitted SSH target, checks the pinned checkout and selected agent binaries,
+and validates isolation and hibernation. Before reporting success, it verifies that
+destroy removed both provider VMs and their managed SSH/state files.
+After the host checks pass, exercise create, suspend/resume and destroy through
+the actual Orca picker. No live host check has been run in this development environment.
+
+The supplied Orca skill normally suggests an authenticated image layer. This
+setup follows the explicitly requested credential-free golden-image policy instead:
+only selected private development credential files are injected after VM creation.
+There is no auth snapshot and no `orca serve` process in the image. Prepare those
+files with the agent's interactive login in your own terminal; verify the selected
+agent's login status and `gh auth status` inside a created VM without printing tokens.
 
 ## Networking and storage maintenance
 

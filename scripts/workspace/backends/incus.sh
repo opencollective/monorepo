@@ -14,7 +14,6 @@ backend_check() {
     jq -n --arg backend incus --argjson cpus "$(nproc)" --argjson ram "$total" --argjson required "$required" \
         --argjson guestCpus "$(((WORKSPACE_MAX_COUNT + 1) * WORKSPACE_CPUS))" \
         '{backend:$backend,hostCpus:$cpus,hostMemoryGiB:$ram,requiredMemoryGiB:$required,configuredVcpus:$guestCpus}'
-    ((total >= required)) || workspace_error "Full configured concurrency needs at least $required GiB host RAM; adjust .env.workspace.local"
     incus --version
     docker --version 2>/dev/null || true # Docker is required in the guest, not on the host.
 }

@@ -12,5 +12,5 @@ for file in "${files[@]}"; do bash -n "$file"; done
 shellcheck --source-path=SCRIPTDIR -x "${files[@]}"
 shfmt -d -i 4 -ci "${files[@]}"
 node --check scripts/workspace/loopback.cjs
-prettier --check scripts/workspace/*.mjs scripts/workspace/*.cjs docs/workspace-environments.md .github/workflows/monorepo-tests.yml
+prettier --check scripts/workspace/*.mjs scripts/workspace/*.cjs orca.yaml docs/workspace-environments.md .github/workflows/monorepo-tests.yml
 node --test scripts/init.test.mjs scripts/workspace/*.test.mjs

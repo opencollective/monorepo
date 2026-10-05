@@ -178,6 +178,7 @@ prepare() {
     as_developer git -C "$root" switch -C "$branch" "$head" >&2
     # Monorepo feature branches may update submodule metadata; initialize after pinning too.
     if [[ "$root" == "$WORKSPACE_GUEST_ROOT" ]]; then as_developer "$root/scripts/init.sh" --projects "$WORKSPACE_PROJECTS" >&2; fi
+    verify_project_checkout "$root" "$branch" "$head"
     install_all_dependencies
     start_stack
     printf '%s\n' "$root" # This is the sole stdout returned to the host.
