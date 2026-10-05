@@ -1,0 +1,8 @@
+{
+  "cpus": 8,
+  "memory_mb": 43008,
+  "disk_gb": 200,
+  "share_host_folder": true,
+  "storage_pool": "default",
+  "network_address": "192.168.121.0/24"
+}

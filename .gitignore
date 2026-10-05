@@ -6,6 +6,10 @@ opencode.json
 .opencode
 .worktrees
 
+# Per-machine VM state, forwarding approval, and resource overrides stay local.
+.vagrant/
+.vm.local.json
+
 # Skills are specific to each developer
 .agents/skills
 skills-lock.json
