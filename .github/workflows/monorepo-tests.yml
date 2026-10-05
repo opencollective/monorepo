@@ -28,3 +28,24 @@ jobs:
 
       - name: Run init tests
         run: node --test scripts/init.test.mjs
+
+  workspace-tests:
+    name: Workspace environments checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install check tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt jq
+          npm install --global prettier@3.9.9
+      - name: Check workspace environments
+        run: ./scripts/workspace/check.sh

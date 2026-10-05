@@ -26,6 +26,11 @@ To take full advantage of these benefits, it is recommended that you go through 
 - Docker or Podman (for the recommended DevContainer setup)
 - Alternatively, check each project's README for manual setup instructions
 
+For Orca sessions with their own VM, Docker daemon, databases, and SSH identities,
+use [isolated workspace environments](docs/workspace-environments.md). This optional
+Bash setup supports Incus/KVM and a reusable golden image; existing local scripts
+and devcontainers keep their current behavior.
+
 ### 1. Clone the Workspace
 
 ```bash

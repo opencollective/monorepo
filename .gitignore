@@ -5,6 +5,7 @@ package-lock.json
 opencode.json
 .opencode
 .worktrees
+.env.workspace.local
 
 # Skills are specific to each developer
 .agents/skills
