@@ -5,3 +5,14 @@ package-lock.json
 opencode.json
 .opencode
 .worktrees
+
+# Skills are specific to each developer
+.agents/skills
+skills-lock.json
+
+# ...except for a few that we want to share:
+!.agents/skills/documentation-feature-pr
+!.agents/skills/i18n-frontend-translate
+!.agents/skills/search-i18n-translations
+!.agents/skills/security*
+!.agents/skills/support-ticket-reply

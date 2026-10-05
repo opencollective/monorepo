@@ -50,6 +50,11 @@
       "onAutoForward": "silent",
       "requireLocalPort": true
     },
+    "3100": {
+      "label": "Security Dashboard",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
     "5432": {
       "label": "Postgres",
       "onAutoForward": "silent",

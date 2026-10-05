@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review Feature Security"
-  short_description: "Known-safe Open Collective security patterns for feature review and hunters"
-  default_prompt: "Review [feature/module] against Open Collective known-safe security patterns, and flag only real defect classes (missing admin-write 2FA, wrong V2 OAuth scopes, IDOR, ledger integrity, webhook SSRF)."
