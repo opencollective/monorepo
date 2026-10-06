@@ -1,27 +1,29 @@
-// Resource and checkout settings shared by Vagrant and the host launcher.
+// Resource and checkout settings shared by Incus and the host launcher.
 // SSH forwarding approval lives separately in ignored per-VM state.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isMain, main } from "./process.mjs";
 
 export const DEFAULTS = Object.freeze({
+  provider: "incus/kvm",
   cpus: 8,
-  memory_mb: 43008, // 42 GiB, expressed in the MiB units expected by libvirt.
-  disk_gb: 200,
+  memory_mb: 43008, // 42 GiB, expressed in MiB.
+  disk_gb: 100,
   share_host_folder: true,
-  box: "bento/ubuntu-24.04",
-  box_version: "202508.03.0", // This catalog version includes an amd64 libvirt build.
-  storage_pool: "default",
+  image: "images:ubuntu/24.04/cloud",
+  project: "oc-development",
+  instance_name: "oc-dev",
+  storage_pool: "oc-development",
   network_name: "oc-development",
   network_address: "192.168.121.0/24",
   repo_url: "https://github.com/opencollective/monorepo.git",
   repo_ref: "main",
 });
 function localSettings(root) {
-  const path = join(root, ".vm.local.json");
+  const path = join(root, ".vm/.vm.local.json");
   const local = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
   if (!local || Array.isArray(local) || typeof local !== "object")
-    throw new Error(".vm.local.json must contain a JSON object");
+    throw new Error(".vm/.vm.local.json must contain a JSON object");
   // Fail on misspellings rather than silently booting with unintended defaults.
   const unknown = Object.keys(local).filter(
     (key) => !Object.hasOwn(DEFAULTS, key),
@@ -31,7 +33,7 @@ function localSettings(root) {
   return local;
 }
 
-// Keep the libvirt management network entirely within a private IPv4 range.
+// Keep the Incus management network entirely within a private IPv4 range.
 function validateNetwork(address) {
   const match = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(address);
   const octets = match?.slice(1, 5).map(Number);
@@ -106,10 +108,34 @@ export function loadSettings(root, env = process.env) {
     )
       throw new Error(`${key} must be a nonempty string without whitespace`);
   }
-  for (const key of ["storage_pool", "network_name"]) {
-    if (!/^[a-zA-Z0-9_.-]+$/.test(settings[key]))
+  for (const key of [
+    "storage_pool",
+    "network_name",
+    "project",
+    "instance_name",
+  ]) {
+    if (
+      !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(settings[key]) ||
+      settings[key].length > 63
+    )
       throw new Error(`Invalid ${key}`);
   }
+  if (settings.network_name.length > 15)
+    throw new Error(
+      "network_name must fit a Linux bridge name (15 characters)",
+    );
+  if (settings.project === "default")
+    throw new Error(
+      "Use a dedicated project rather than the Incus default project",
+    );
+  if (settings.provider !== "incus/kvm")
+    throw new Error("provider must be incus/kvm");
+  if (
+    !/^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(settings.image)
+  )
+    throw new Error(
+      "image must be an Incus remote:alias or remote:fingerprint",
+    );
   validateNetwork(settings.network_address);
   // The initial public checkout needs no credentials. Embedded tokens would leak
   // into provisioning arguments and the guest's saved settings file.
@@ -131,7 +157,7 @@ export function loadSettings(root, env = process.env) {
   return settings;
 }
 
-// Vagrant reads stdout as JSON; keep diagnostics on stderr via main().
+// Keep diagnostics on stderr; consumers can read validated settings as JSON.
 if (isMain(import.meta.url))
   await main(() =>
     console.log(JSON.stringify(loadSettings(process.argv[2] ?? process.cwd()))),

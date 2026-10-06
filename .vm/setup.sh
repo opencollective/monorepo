@@ -195,11 +195,12 @@ banner "Open Collective development VM"
 
 stage "Optional host SSH agent forwarding"
 say "Setup can use an already loaded host agent after your explicit approval."
-say "It never creates keys, starts an agent, or loads or removes identities."
+say "It never starts a host agent or loads or removes its identities."
 say "Without authentication, public repositories use HTTPS and Git pushes are unavailable."
 "$VM" ssh-forwarding
 
-stage "VM and shared SSH entry"
+stage "Incus VM and shared SSH entry"
+say "Creation generates a dedicated VM login key in host state outside this checkout."
 "$VM" up
 say "The oc-dev SSH entry is now available to SSH, Orca, and VS Code."
 say "Host key checking remembers this VM; an unexpected change will be rejected."

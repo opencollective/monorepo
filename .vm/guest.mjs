@@ -51,7 +51,7 @@ export function writeEnvDefaults(path, defaults) {
   }
 }
 
-// Provisioning invokes clone as vagrant without an agent. The interactive host
+// Provisioning invokes clone as ubuntu without an agent. The interactive host
 // wizard invokes initialize/stack later over SSH, with optional agent forwarding.
 // Injectable paths/process execution let tests avoid touching a real guest.
 export function createGuest({

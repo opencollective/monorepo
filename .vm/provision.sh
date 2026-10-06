@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Runs as root through Vagrant, without a forwarded SSH agent.
+# Runs as root through Incus, without a forwarded SSH agent.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 [[ "$(id -u)" == 0 ]] || { echo 'Provisioning requires root' >&2; exit 1; }
 [[ -f /etc/os-release ]] && source /etc/os-release
 [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || {
-  echo 'This provisioner supports Ubuntu 24.04; another box needs a compatible provisioner.' >&2
+  echo 'This provisioner supports Ubuntu 24.04; another image needs a compatible provisioner.' >&2
   exit 1
 }
 
-# Vagrant uploads just these provisioning assets over SSH. Keep a guest-local
+# Incus uploads these provisioning assets through the guest agent. Keep a guest-local
 # copy for later onboarding; no synced folder is needed to run shared scripts.
 install -d -m 755 /opt/oc-vm
 cp -R /tmp/oc-vm/. /opt/oc-vm/
+find /opt/oc-vm -type d -exec chmod 755 {} +
 find /opt/oc-vm -name '*.sh' -exec chmod 755 {} +
 # Save validated resource/checkout settings. Host forwarding approval is separate
 # and is never uploaded as a provisioning input.
@@ -32,12 +33,12 @@ apt-get install -y --no-install-recommends \
   libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
   fonts-liberation libpango-1.0-0 libpangocairo-1.0-0
 
-# machine_virtual_size grows the virtual disk, not its partition/filesystem.
+# The Incus root disk size grows the virtual disk, not its partition/filesystem.
 root_device=$(readlink -f "$(findmnt -n -o SOURCE /)")
 growth_device="$root_device"
 volume_group=''
 if [[ "$(lsblk -dn -o TYPE "$root_device")" == lvm ]]; then
-  # Bento can use LVM: grow the backing partition and PV before extending the LV.
+  # Images can use LVM: grow the backing partition and PV before extending the LV.
   # Multiple PVs need a deliberate storage policy, so refuse that layout here.
   volume_group=$(lvs --noheadings -o vg_name "$root_device" | xargs)
   readarray -t physical_volumes < <(pvs --noheadings -o pv_name --select "vg_name=$volume_group" | awk '{print $1}')
@@ -47,7 +48,7 @@ fi
 parent_device=$(lsblk -dn -o PKNAME "$growth_device")
 partition=$(cat "/sys/class/block/${growth_device##*/}/partition")
 if [[ -z "$parent_device" || -z "$partition" ]]; then
-  echo "Unsupported root layout: $root_device. Expected a partition on the box root disk." >&2
+  echo "Unsupported root layout: $root_device. Expected a partition on the VM root disk." >&2
   exit 1
 fi
 # growpart reports NOCHANGE on reprovisioning; that is an expected success state.
@@ -78,16 +79,16 @@ printf 'deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.g
   > /etc/apt/sources.list.d/github-cli.list
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin gh
-usermod -aG docker vagrant
+usermod -aG docker ubuntu
 systemctl enable --now docker
 
 # System-level PATH links make Node and agents usable in Orca/noninteractive SSH.
 # Install under the developer's nvm directory, not root's. PATH links are needed
 # because noninteractive SSH/Orca processes may never source shell startup files.
-sudo -iu vagrant bash /opt/oc-vm/install-tools.sh
+sudo -iu ubuntu bash /opt/oc-vm/install-tools.sh
 node_version=$(jq -er '.node' /opt/oc-vm/versions.json)
 for executable in node npm npx codex opencode eslint prettier tsc pm2; do
-  target="/home/vagrant/.nvm/versions/node/v$node_version/bin/$executable"
+  target="/home/ubuntu/.nvm/versions/node/v$node_version/bin/$executable"
   [[ -e "$target" ]] || { echo "Missing installed executable: $target" >&2; exit 1; }
   ln -sfn "$target" "/usr/local/bin/$executable"
 done
@@ -95,21 +96,21 @@ done
 # Refuse an unexpected owner instead of recursively chowning someone else's data.
 # clone preserves an existing checkout and uses public HTTPS on the first boot.
 if [[ ! -e /workspace ]]; then
-  install -d -o vagrant -g vagrant /workspace
+  install -d -o ubuntu -g "$(id -gn ubuntu)" /workspace
 fi
-[[ "$(stat -c %U /workspace)" == vagrant ]] || {
+[[ "$(stat -c %U /workspace)" == ubuntu ]] || {
   echo '/workspace already exists with another owner; resolve it before provisioning.' >&2
   exit 1
 }
-sudo -iu vagrant node /opt/oc-vm/guest.mjs clone
+sudo -iu ubuntu node /opt/oc-vm/guest.mjs clone
 # Both interactive shells and login shells get the same guest conveniences.
 # Append the source line once so repeated provisioning does not duplicate hooks.
-for shell_file in /home/vagrant/.bashrc /home/vagrant/.profile; do
+for shell_file in /home/ubuntu/.bashrc /home/ubuntu/.profile; do
   touch "$shell_file"
   if ! rg -qF 'source /opt/oc-vm/user-shell.sh' "$shell_file"; then
     printf '\nsource /opt/oc-vm/user-shell.sh\n' >> "$shell_file"
   fi
-  chown vagrant:vagrant "$shell_file"
+  chown "ubuntu:$(id -gn ubuntu)" "$shell_file"
 done
 
 echo 'VM ready. Run ./scripts/vm.sh setup on the host to initialize repositories and credentials.'

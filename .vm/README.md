@@ -1,24 +1,24 @@
 # Open Collective development VM
 
-This setup gives you a dedicated Linux development machine on your computer. Your
-repositories, dependencies, databases, Docker containers, and coding agents live
-inside it. Orca and VS Code stay on your host and connect over SSH.
+A persistent **Ubuntu 24.04 virtual machine** runs your repositories, Docker,
+databases and development tools. SSH, Orca and VS Code connect from your host.
+The compatibility baseline is **Incus 6.23 on Linux x86_64 with KVM**;
+compatible newer client/server releases are accepted.
 
-The first supported host is **Linux x86_64 with KVM/libvirt**. Defaults are **8 CPUs,
-42 GiB RAM, and a 200 GiB virtual disk**. The disk grows as it is used; the full
-capacity is not allocated immediately. Leave enough RAM and storage for your host.
+Defaults: **8 CPUs, 42 GiB RAM and a 100 GiB virtual disk**. The default `dir` pool
+uses a sparse disk file; reserve enough real storage for data and backups.
+The launcher integrates with your existing local daemon and creates dedicated
+resources. It does not initialize or reset your daemon.
 
 ## 1. Prepare your host
 
-You need hardware virtualization enabled in your firmware, access to `/dev/kvm`,
-Vagrant, the `vagrant-libvirt` provider, Node.js 20 or newer, and OpenSSH tools.
-Node runs the VM administration helpers; Docker and application code run inside
-the guest. Provisioning and administration use Bash and Node.js. The `Vagrantfile`
-is the minimal DSL adapter required by Vagrant, with settings validated in Node.
-
-### Clone the launcher and check prerequisites
-
-Clone the workspace without initializing its submodules on the host:
+Use your installed Incus 6+ daemon, enabled hardware virtualization, `/dev/kvm`,
+Node.js 20+ and OpenSSH tools (`ssh`, `ssh-keygen`, optional `ssh-add`). Host route
+inspection needs `ip` from iproute2. The daemon must report QEMU support and your
+regular host user must have administrative access to its local socket. See
+[Incus installation](https://linuxcontainers.org/incus/docs/main/installing/)
+for distribution-specific packages and permissions. Run without `sudo`, so
+UID/GID and SSH state belong to you. Remote and clustered daemons are unsupported.
 
 ```bash
 git clone https://github.com/opencollective/monorepo.git
@@ -26,80 +26,95 @@ cd monorepo
 ./scripts/vm.sh doctor
 ```
 
-The host checkout is the launcher. The working checkout is cloned independently
-inside the VM at `/workspace`. The launcher folder is also synced to `/vagrant`
-by default; set `share_host_folder` to `false` to disable that sharing.
+Do not initialize host submodules. The working checkout is cloned independently
+at `/workspace` **inside the VM**. Doctor reads versions, daemon capabilities and
+prerequisites; it creates no launcher resources or keys and changes no daemon
+configuration. Run the launcher on the KVM host itself; this development container
+has no access to that host's Incus daemon.
 
-The doctor checks installed commands, KVM access, Vagrant configuration, the
-provider plugin, and access to `qemu:///system`. It does not boot a VM.
-
-## 2. Customize resources if needed
-
-Copy the example before starting the VM:
+## 2. Configure the VM
 
 ```bash
-cp .vm/.vm.local.example.json .vm.local.json
+cp .vm/.vm.local.example.json .vm/.vm.local.json
+# Or supply environment overrides:
+OC_VM_CPUS=4 OC_VM_MEMORY_MB=16384 ./scripts/vm.sh up
 ```
 
-Edit the JSON file. It is ignored by Git; personal settings never need a commit.
-Environment variables override its values:
+Precedence: `OC_VM_<UPPERCASE_SETTING>` environment variables, then ignored
+`.vm/.vm.local.json`, then tracked defaults. Persist overrides or use the same environment
+for subsequent commands. Removed `box` and `box_version` JSON settings are rejected.
+
+| Setting             | Default                                          | Meaning                                                                            |
+| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `provider`          | `incus/kvm`                                      | The virtualization provider to use. Only `incus/kvm` is supported.                 |
+| `image`             | `images:ubuntu/24.04/cloud`                      | Remote alias or full fingerprint resolving to an amd64 VM image.                   |
+| `project`           | `oc-development`                                 | Dedicated project; `default` is rejected.                                          |
+| `instance_name`     | `oc-dev`                                         | VM name; the SSH alias remains `oc-dev`.                                           |
+| `cpus`              | `8`                                              | Virtual CPUs.                                                                      |
+| `memory_mb`         | `43008`                                          | RAM in MiB (42 GiB).                                                               |
+| `disk_gb`           | `100`                                            | Root capacity in GiB; growth supported, shrinking rejected.                        |
+| `share_host_folder` | `true`                                           | Writable launcher checkout at `/host-workspace`.                                   |
+| `storage_pool`      | `oc-development`                                 | Dedicated `dir` pool by default; another name selects an existing VM-capable pool. |
+| `network_name`      | `oc-development`                                 | Dedicated managed bridge in the default project; maximum 15 characters.            |
+| `network_address`   | `192.168.121.0/24`                               | Private IPv4 subnet, /16 through /28; first usable address is the gateway.         |
+| `repo_url`          | `https://github.com/opencollective/monorepo.git` | Public HTTPS checkout URL, without embedded credentials.                           |
+| `repo_ref`          | `main`                                           | Initial branch, tag or commit; existing checkouts are preserved.                   |
+
+For example, use `OC_VM_IMAGE`, `OC_VM_PROJECT` or `OC_VM_STORAGE_POOL`.
+JSON sharing values are booleans; `OC_VM_SHARE_HOST_FOLDER` accepts `true`/`false`.
+
+The bridge enables IPv4 DHCP/NAT with gateway `192.168.121.1/24` by default and
+IPv6 disabled. The launcher checks host routes and Incus networks for subnet
+overlap and refuses unrelated resources with matching names. Resources carry
+`user.oc-vm.owner`, derived from the canonical launcher path, and reuse requires
+compatible configuration. Keep this checkout at the same path. A second checkout
+needs separate project/bridge names and an explicitly selected existing custom pool.
+The daemon's default profiles are not used.
+
+### Current image and reproducibility
+
+Fresh creation resolves the **current** Ubuntu 24.04 cloud **amd64 VM** image,
+copies its fingerprint into the dedicated project and configures cloud-init
+before first boot. These are Incus project-built Ubuntu images, not Canonical-built
+images. See [the image server](https://images.linuxcontainers.org/) and
+[6.23 cloud-init support](https://github.com/lxc/incus/blob/v6.23.0/doc/cloud-init.md).
+
+The full fingerprint and build serial are recorded in instance metadata, `status`
+and the private host `image.json`. Floating aliases do not guarantee identical
+base bytes across machines. Existing VMs keep their disks: `up` never resolves or
+downloads their image again, even when the image server is unavailable. Initial
+creation requires that server, unless you import a local image as described below.
+
+`.vm/versions.json` pins Node to `24.21.0`; nvm/global npm tools use `latest`.
+Reprovisioning resolves those releases again; explicit versions can replace `latest`.
+Signed apt repositories supply OS, Docker and GitHub CLI packages. Project dependencies
+use each service's manifests and lockfiles.
+
+### Sharing and private host state
+
+An Incus disk device shares the **launcher directory**, including untracked files,
+at `/host-workspace`. Guest writes affect host files. `/workspace` stays independent.
+Cloud-init creates `ubuntu` with your host UID/GID so ordinary shared files are
+writable; provisioning verifies alignment. A mismatch requires inspection. The
+launcher never recursively changes ownership of your host checkout.
+
+Private login keys and approval state live outside the launcher at
+`${XDG_STATE_HOME:-$HOME/.local/state}/opencollective-vm/<checkout-id>-<project>-<instance>/`.
+Directories are mode 700 and private files mode 600. `XDG_STATE_HOME` must be absolute
+and outside the launcher, including through symlinks. Preserve this state with VM
+backups. A missing existing-VM key requires restoring state or deliberately recovering
+guest access through Incus; it is not automatically regenerated.
+
+Stop, change settings, then run `up` to apply CPU/RAM/sharing changes. Increasing
+`disk_gb` while stopped expands the disk and triggers provisioning to grow its
+partition/filesystem. Back up before disk changes. Pool/network/project changes
+require a separate VM or manual migration; changing `image` does not rebuild a VM.
 
 ```bash
-OC_VM_CPUS=4 OC_VM_MEMORY_MB=16384 vagrant up
+./scripts/vm.sh stop
+# Edit .vm/.vm.local.json, then:
+./scripts/vm.sh up
 ```
-
-| Setting             | Default                                          | Environment override      | Description                                                                                                                                           |
-| ------------------- | ------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cpus`              | `8`                                              | `OC_VM_CPUS`              | Number of virtual CPUs assigned to the VM.                                                                                                            |
-| `memory_mb`         | `43008` (42 GiB)                                 | `OC_VM_MEMORY_MB`         | VM RAM in MiB; reserve enough memory for your host as well.                                                                                           |
-| `disk_gb`           | `200`                                            | `OC_VM_DISK_GB`           | Initial virtual disk capacity in GiB. Space is allocated as used; changing this does not resize an existing VM disk.                                  |
-| `share_host_folder` | `true`                                           | `OC_VM_SHARE_HOST_FOLDER` | Sync the host launcher folder at `/vagrant`; set `false` to disable. JSON accepts `true`/`false`; the environment accepts the strings `true`/`false`. |
-| `box`               | `bento/ubuntu-24.04`                             | `OC_VM_BOX`               | Vagrant base image. It must provide an amd64 libvirt build compatible with the Ubuntu 24.04 provisioner.                                              |
-| `box_version`       | `202508.03.0`                                    | `OC_VM_BOX_VERSION`       | Exact base-image release to use when creating the VM.                                                                                                 |
-| `storage_pool`      | `default`                                        | `OC_VM_STORAGE_POOL`      | Host libvirt storage pool in which to create the VM disk.                                                                                             |
-| `network_name`      | `oc-development`                                 | `OC_VM_NETWORK_NAME`      | Name of the private libvirt NAT network used for VM management and outbound access.                                                                   |
-| `network_address`   | `192.168.121.0/24`                               | `OC_VM_NETWORK_ADDRESS`   | Private IPv4 subnet for that network, in CIDR notation with a prefix from `/16` to `/28`. Choose one that does not overlap your other networks.       |
-| `repo_url`          | `https://github.com/opencollective/monorepo.git` | `OC_VM_REPO_URL`          | HTTPS URL of the top-level repository cloned into `/workspace` on first provisioning. Embedded credentials are rejected.                              |
-| `repo_ref`          | `main`                                           | `OC_VM_REPO_REF`          | Branch, tag, or commit to check out when creating the guest checkout. Reprovisioning does not change an existing checkout.                            |
-
-Keep environment overrides consistent for later Vagrant commands, or persist them
-in the local JSON file. Apply CPU/RAM changes with `vagrant reload`.
-
-Choose disk capacity **before creation**. Provisioning expands both ordinary and
-LVM root layouts to use the initial virtual disk. Changing `disk_gb` afterward
-does not resize an existing libvirt volume; use a backed-up recreation for this
-first version. [Libvirt disk configuration](https://vagrant-libvirt.github.io/vagrant-libvirt/configuration.html)
-
-The box version is deliberately pinned: it has an amd64 libvirt build; the newer
-`202510.26.0` catalog entry does not. Another box must have a libvirt build and use
-Ubuntu 24.04 with a supported single-disk root layout. `.vm/versions.json` pins
-Node to `24.21.0`; nvm and global npm tools use `latest`. Each provisioning run
-resolves nvm’s latest stable release and installs the current npm package releases.
-You can replace `latest` with an explicit nvm tag or npm package version if needed.
-Run `vagrant provision` to refresh these tools. Signed apt repositories supply
-current OS, Docker, Compose, and GitHub CLI packages. Project dependencies still
-use each repository’s package manifests and lockfiles.
-
-### Host-folder sharing
-
-The host launcher folder is available at `/vagrant` by default. To disable
-sharing, set `"share_host_folder": false` in `.vm.local.json`, then run
-`vagrant up` for a new VM or `vagrant reload` for an existing one. You can also use
-`OC_VM_SHARE_HOST_FOLDER=false vagrant up`; use `true` to enable sharing.
-
-This enables Vagrant's normal synced folder for the directory containing the
-Vagrantfile. `/workspace` remains the independent guest development checkout.
-The sync implementation is selected by Vagrant and the provider according to
-installed host support. With libvirt this may be NFS (bidirectional) or rsync
-(host-to-guest copies); NFS requires host NFS tooling, while rsync updates can be
-triggered with `vagrant rsync`.
-[Libvirt synced-folder behavior](https://vagrant-libvirt.github.io/vagrant-libvirt/examples.html#synced-folders)
-
-Enabling sharing exposes files in that host directory, including local untracked
-files, to guest processes. With a bidirectional backend, guest changes also affect
-the host files. Disable sharing when you want filesystem
-isolation. Disabling a copy-based backend does not remove files already copied
-into the guest.
 
 ## 3. Run guided setup
 
@@ -114,7 +129,7 @@ The wizard walks you through seven stages:
 1. Check for an already loaded host SSH agent and ask whether you approve
    forwarding it to this VM. Without an available agent or your approval,
    forwarding stays disabled.
-2. Run `vagrant up --provider=libvirt`, install the guest toolchain, clone the
+2. Create/start the Incus VM with `./scripts/vm.sh up`, install the guest toolchain, clone the
    workspace, and install the `oc-dev` SSH entry.
 3. Connect to the guest, configure Git identity, and initialize repositories.
    Working forwarded GitHub authentication uses SSH; otherwise public repositories
@@ -131,8 +146,8 @@ The wizard walks you through seven stages:
 Setup uses your existing host agent, with no required key filename.
 Approval allows **guest processes to authenticate using identities available
 through your host agent**, including other identities it holds. The choice is
-stored as a boolean in the host launcher's ignored
-`.vagrant/oc-ssh-settings.json`. Without that file, forwarding defaults to disabled.
+stored as a boolean in the private host state directory
+described below, in `ssh-settings.json`. Without that file, forwarding defaults to disabled.
 The wizard asks again when rerun; ordinary SSH-config refreshes preserve the choice.
 
 Without working forwarded authentication, public repositories are cloned over
@@ -143,16 +158,17 @@ Existing checkouts, remote URLs, and branches are preserved. Public repositories
 cloned through HTTPS keep their HTTPS remotes if you enable forwarding later;
 choose an SSH remote yourself when you want to push through the forwarded agent.
 
-`vagrant up` by itself performs noninteractive system provisioning and clones the
+`./scripts/vm.sh up` by itself performs noninteractive system provisioning and clones the
 top-level repository. It deliberately does not prompt for credentials or clone
 private submodules. Run the wizard afterward to complete setup. Provisioning
-uploads explicit setup assets over SSH. The `share_host_folder` setting controls
-the host launcher-folder sync described above.
+uploads explicit setup assets with `incus file push` and runs them as root through
+`incus exec`. The `share_host_folder` setting controls
+the host launcher-folder sharing described above.
 The setup does not mount a host Docker socket or copy host credential stores.
-[Vagrant synced folders](https://developer.hashicorp.com/vagrant/docs/synced-folders/basic_usage)
+[Incus disk devices](https://github.com/lxc/incus/blob/v6.23.0/doc/reference/devices_disk.md)
 
 Logins remain inside the guest tool's credential store. Do not put tokens in
-`.vm.local.json`, the Vagrantfile, or committed files. You can defer a login and use
+`.vm/.vm.local.json`, cloud-init configuration, or committed files. You can defer a login and use
 the command printed in the wizard's closing summary later. If setup is interrupted,
 rerun it: existing checkouts, branches, databases, and user configuration are kept.
 
@@ -165,7 +181,7 @@ initial creation; host checkout changes are never copied into `/workspace`.
 
 ### One SSH target
 
-The helper derives connection details from Vagrant rather than hard-coding an IP,
+The helper derives connection details from the local Incus daemon rather than hard-coding an IP,
 port, or login key:
 
 ```bash
@@ -176,12 +192,11 @@ ssh oc-dev
 
 It writes `~/.ssh/oc-development.conf` and adds an `Include` at the beginning of
 `~/.ssh/config`, preserving your other entries. Keep `oc-dev` reserved for this VM.
-Vagrant's generated login key authenticates the connection. Agent forwarding uses
+A dedicated launcher-generated Ed25519 login key authenticates the connection. Agent forwarding uses
 your existing host agent only when approved during setup. Orca and VS Code must have access to
 that host agent too. Starting them from a host session with the working
 `SSH_AUTH_SOCK` is one way to provide it.
 Use `./scripts/vm.sh ssh` if you prefer the launcher's standalone SSH config.
-[Vagrant ssh-config](https://developer.hashicorp.com/vagrant/docs/cli/ssh_config)
 
 ### Orca
 
@@ -308,11 +323,12 @@ containers are running. Docker access is guest-local and grants administrative
 access to that VM; its remote TCP API is disabled.
 
 ```bash
-vagrant halt               # Shut down; preserve files and disks
-vagrant up                 # Start again
-./scripts/vm.sh ssh-config --install
-vagrant reload             # Reboot/apply CPU or RAM changes
-vagrant provision          # Reapply system provisioning without resetting work
+./scripts/vm.sh stop       # Shut down; preserve files and disks
+./scripts/vm.sh up         # Start again and refresh the SSH alias
+./scripts/vm.sh restart    # Reboot and refresh the SSH alias
+./scripts/vm.sh status     # State, provisioning marker and image provenance
+./scripts/vm.sh provision  # Reapply system provisioning without resetting work
+./scripts/vm.sh retry-cloud-init # Recover failed initial cloud-init after repairing its cause
 ```
 
 To change the forwarding choice without repeating the whole wizard, run:
@@ -339,104 +355,229 @@ This VM is a single persistent development machine. Docker is ready to host futu
 disposable per-workspace environments; no `environmentRecipes`, lifecycle scripts,
 container workspace manager, or guest Orca server is installed in this phase.
 
-## Backup and recreate
+## Backups, snapshots and recreation
 
-**`vagrant destroy` deletes the guest disk**, including unpushed Git work, `.env`
-files, agent login credentials, databases, and Docker volumes. The host launcher
-and your host SSH keys remain. A base Vagrant box cache is not a backup.
+Commands below work with Incus 6.23. Substitute configured resource names if you
+changed defaults. Full exports can include credentials; keep them private.
 
-Before destroying it, push development commits or export patches, copy any needed
-guest files explicitly over SSH/SFTP, and dump local data if you want to keep it:
-
-```bash
-# Host terminal: explicit copies, not filesystem sharing
-ssh oc-dev 'pg_dump -h 127.0.0.1 -U postgres -Fc opencollective_dvl' > development.pgsql
-ssh oc-dev 'git -C /workspace/opencollective-api diff --binary' > api-working.patch
-```
-
-The patch example does not capture untracked files, staged changes, or unpushed
-commits. Export those separately or use your normal Git backup workflow. Keep
-credential backups private if you choose to make them; recreating and logging in
-again is the default. To recreate after backing up:
+**Stop the VM before a consistent full backup**, so databases and filesystems are
+not changing. A portable export uses the default archive format, without
+`--optimized-storage` (which depends on the original storage backend).
 
 ```bash
-vagrant destroy
-./scripts/vm.sh setup
+./scripts/vm.sh stop
+incus --force-local --project oc-development export local:oc-dev ./oc-dev-backup.tar.gz
+./scripts/vm.sh up
 ```
 
-The regenerated VM has a new SSH host key. A mismatch is intentional only after
-you rebuilt the machine. Verify its new fingerprint, then reset only this VM's
-dedicated trust record:
+Back up private host state too. External files shared at `/host-workspace` are
+**not included** in instance exports or snapshots; back up the launcher separately.
+A base image or snapshot on the same pool is not an independent backup.
+
+To import, prepare the project/pool/bridge on the destination and use an unused
+instance name. Restore the same launcher path, private state, resource settings
+and UID/GID to retain launcher management. Exports preserve ownership/provenance
+markers. A different launcher path or host user needs an explicit administrative
+migration of ownership markers and the developer account; it is not automatically adopted.
 
 ```bash
-./scripts/vm.sh ssh-config --install --reset-host-key
+# Configured resources exist; no instance with this name:
+incus --force-local --project oc-development import local: ./oc-dev-backup.tar.gz oc-dev --storage oc-development
+./scripts/vm.sh up
 ```
 
-The helper prints the fingerprint through Vagrant and asks before clearing the
-old record. It never disables host-key checking or clears your general
-`~/.ssh/known_hosts`. Re-test/re-import the target in Orca if it cached a previous
-address or key.
+Snapshots provide rollback on the same pool. Stop first for consistency. Restore
+replaces guest changes since the snapshot, including checkout, database and
+credential changes.
 
-## Troubleshooting and validation
+```bash
+./scripts/vm.sh stop
+incus --force-local --project oc-development snapshot create local:oc-dev before-change
+incus --force-local --project oc-development snapshot list local:oc-dev
+./scripts/vm.sh up
+# To roll back later, first stop again:
+incus --force-local --project oc-development snapshot restore local:oc-dev before-change
+incus --force-local --project oc-development snapshot delete local:oc-dev before-change
+```
 
-- **KVM permission denied:** enable hardware virtualization, confirm `/dev/kvm`
-  exists, join the `kvm` group, and start a new login session.
-- **Cannot connect to libvirt:** check `virsh -c qemu:///system list --all`, daemon
-  sockets, user permissions, and the provider installation guide.
-- **Network collision:** choose a private unused subnet in `.vm.local.json` before
-  creation. Avoid your LAN, VPN, and Docker subnets. Changing the management
-  network on an existing VM requires a deliberate network migration/recreation.
-- **SSH Git access fails:** check `ssh-add -l` on the host and in the guest
-  (these commands only list loaded identities). Confirm forwarding was approved,
-  that the editor can access the host agent, and that GitHub recognizes an available
-  identity with the required repository/SSO access. Without usable authentication,
-  setup uses public HTTPS clones and reports pushes/private access as unavailable.
-  SSH Git authentication does not authenticate `gh` API calls.
-- **GitHub key prompts on first access:** compare the presented host fingerprint
-  with [GitHub's published fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
-- **Codex device login unavailable:** run `codex login` in the guest, and use a
-  second host terminal with `ssh -N -L 127.0.0.1:1455:127.0.0.1:1455 oc-dev` for
-  its browser callback. Follow the URL printed by Codex. Do not copy the host's
-  existing authentication cache. [Codex authentication](https://developers.openai.com/codex/auth)
-- **Dependency startup fails:** run `oc-dependencies` in the guest; inspect
-  `docker ps -a`, `docker logs <container>`, disk space, and API `.env` endpoints.
-- **Orca/VS Code cannot find Node or agents:** check
-  `ssh oc-dev 'node --version && codex --version && opencode --version'`.
-  Reprovision to restore the system PATH links.
-- **Host port already in use:** stop its other forward/process, or deliberately
-  adjust application URLs along with tunnel ports. Orca and VS Code need not both
-  forward the same port simultaneously.
+### Delete and recreate
 
-The private NAT network provides outbound Internet access without bridging the
-VM onto your LAN. Services follow their application and Compose binding settings
-and may be reachable from the host or other guests on that network. Use editor
-port forwarding or SSH tunnels for browser access through `localhost`.
+**Deletion removes the guest disk, snapshots, unpushed work, databases and guest
+credentials.** Back up first. Reprovisioning reapplies packages/tools while preserving
+checkouts, Docker volumes and credential stores.
 
-Repository automation checks configuration parsing, shell scripts, SSH quoting and
-host-key policy, forwarding approval, HTTPS cloning without authentication, tool
-version resolution, direct Compose startup, and preservation of existing work.
-Run them without booting a VM:
+```bash
+./scripts/vm.sh destroy
+```
+
+`destroy` deletes the launcher-owned VM (including disks and snapshots), the
+project and its remaining contents (such as its copied base image), bridge, and
+dedicated `oc-development` storage pool. It also removes this
+launcher's SSH include and known-hosts file, login key, and private approval/state
+files. A configured existing `storage_pool` is shared and is preserved. The host
+checkout and its files are not removed. Back up anything needed from the guest
+first; after destruction, run `./scripts/vm.sh setup` to create a fresh VM and
+SSH identity.
+
+After `destroy`, setup generates a new host login key, and the old dedicated
+known-hosts file is gone. If you manually delete and recreate only the Incus VM,
+the host key and SSH trust state remain; run
+`./scripts/vm.sh ssh-config --install --reset-host-key` to review its fingerprint
+and clear the old `oc-dev` record. General `known_hosts` entries remain intact.
+
+`destroy` checks Incus ownership markers before deleting named resources. If a
+resource name now belongs to something else, it stops before making changes so
+you can resolve the collision manually.
+
+### Offline image export/import
+
+While online, export the full fingerprint shown by `status`. In 6.23 an explicit
+file prefix for a split VM image creates metadata and a `.root` disk file:
+
+```bash
+# Replace the placeholder with the complete fingerprint from status:
+incus --force-local --project oc-development image export local:<fingerprint> ./ubuntu-24.04-cloud --vm
+```
+
+Copy **both** files to the offline host. After its dedicated project exists:
+
+```bash
+incus --force-local --project oc-development image import ./ubuntu-24.04-cloud ./ubuntu-24.04-cloud.root --alias ubuntu-24.04-offline
+OC_VM_IMAGE=local:ubuntu-24.04-offline ./scripts/vm.sh up
+```
+
+On an empty daemon, manually prepare launcher-compatible resources first. Obtain
+the owner value with:
+
+```bash
+node --input-type=module -e 'import {launcherIdentity} from "./.vm/state.mjs"; console.log(launcherIdentity(process.cwd()))'
+```
+
+For an empty daemon using the default names, with the subnet checked for conflicts:
+
+```bash
+oc_vm_owner=$(node --input-type=module -e 'import {launcherIdentity} from "./.vm/state.mjs"; console.log(launcherIdentity(process.cwd()))')
+incus --force-local --project default storage create local:oc-development dir "user.oc-vm.owner=$oc_vm_owner"
+incus --force-local --project default network create local:oc-development \
+  "user.oc-vm.owner=$oc_vm_owner" ipv4.address=192.168.121.1/24 \
+  ipv4.nat=true ipv4.dhcp=true ipv6.address=none
+incus --force-local project create local:oc-development \
+  -c "user.oc-vm.owner=$oc_vm_owner" -c features.images=true \
+  -c features.profiles=true -c features.storage.volumes=true -c features.networks=false
+```
+
+Then run the image import above. Alternatively reuse resources from a prior
+installation. System provisioning and
+cloning still require apt/npm/Git endpoints or separately prepared caches; saving
+a base image only removes the upstream image-server dependency.
+
+## Troubleshooting
+
+- **Prerequisites:** run `doctor`, `incus --force-local version local:` and
+  `incus --force-local info local:`. Check the local socket, `/dev/kvm`, daemon QEMU
+  packages and regular-user permissions.
+- **Collision:** choose unused resource names/subnet. Avoid tagging unrelated
+  resources as owned. NAT still lets host/other bridge guests reach services bound
+  to guest addresses; use editor/SSH forwarding for browser access via localhost.
+- **Agent/cloud-init:** failures retain the VM and name the stage. Inspect
+  `incus --force-local --project oc-development console local:oc-dev`, or
+  `incus --force-local --project oc-development exec local:oc-dev -- cloud-init status --long`
+  once the agent responds. The launcher prints detailed cloud-init status and the
+  tails of `/var/log/cloud-init-output.log` and `/var/log/cloud-init.log` on failure,
+  including a timeout. Repair the reported cause before retrying `up`; retrying the
+  launcher does not clear cloud-init's saved errors or rerun its completed modules.
+  Agent readiness allows 180 seconds; cloud-init waits up to 10 minutes.
+- **Guest DNS/networking:** `Temporary failure resolving archive.ubuntu.com`
+  means the guest cannot resolve the Ubuntu package servers. Cloud-init failure
+  diagnostics include guest addresses, IPv4 routes, resolver configuration and a
+  bounded DNS lookup. Check that the guest received an address on the configured
+  subnet, a default route through the bridge and a reachable DNS server. Also test
+  DNS on the host. Host firewall rules must allow guest DHCP/DNS traffic to the
+  bridge and guest traffic forwarded to the internet. Docker on the Incus host can
+  set a `FORWARD` policy that blocks Incus traffic; see the
+  [Incus firewall guide](https://linuxcontainers.org/incus/docs/main/howto/network_bridge_firewalld/)
+  for UFW, firewalld and Docker remedies. Apply the remedy for the host's actual
+  firewall; the launcher does not rewrite host firewall rules. Fix networking
+  before retrying a failed package module; `up` alone does not clear its saved
+  cloud-init error.
+
+  With firewalld, a new bridge can inherit the host's default zone, which may
+  reject DHCP even while Incus's dnsmasq is listening and Incus's own rules allow
+  it. Assign the dedicated bridge to `trusted`, as described in the Incus guide:
+
+  ```bash
+  sudo firewall-cmd --zone=trusted --change-interface=oc-development
+  sudo firewall-cmd --permanent --zone=trusted --change-interface=oc-development
+  incus --force-local --project oc-development exec local:oc-dev -- networkctl renew enp5s0
+  incus --force-local --project oc-development exec local:oc-dev -- timeout 30 bash -c \
+    'until getent ahostsv4 archive.ubuntu.com; do sleep 1; done'
+  ```
+
+  Replace the bridge/project/instance names if configured differently. The first
+  command applies the assignment immediately; the second persists it without
+  reloading unrelated runtime firewall configuration. `trusted` permits guest
+  access to host services. A host requiring tighter restrictions should use a
+  dedicated zone/policy allowing DHCP, DNS and outbound forwarding instead.
+  Remove this manual zone assignment when permanently deleting the bridge:
+
+  ```bash
+  sudo firewall-cmd --zone=trusted --remove-interface=oc-development
+  sudo firewall-cmd --permanent --zone=trusted --remove-interface=oc-development
+  ```
+
+- **Recover a failed first boot:** after repairing networking, run
+  `./scripts/vm.sh retry-cloud-init`. It accepts a completed cloud-init boot whose
+  errors are limited to package installation, before system provisioning starts.
+  It verifies DNS for the Ubuntu repositories, saves the old NoCloud user-data at
+  `/var/lib/cloud/seed/nocloud-net/user-data.oc-vm-before-retry`, refreshes the
+  launcher bootstrap configuration and reruns cloud-init using `cloud-init clean`
+  followed by an Incus restart. The VM disks, machine ID, original boot logs,
+  dedicated login key and SSH host keys are preserved. Cloud-init history/cache
+  is reset; developer group creation is safe to repeat. A pending recovery marker
+  lets `up` resume an interruption. Provisioning and SSH configuration follow only
+  after cloud-init succeeds. Initialized VMs and unrelated cloud-init failures
+  require targeted repair instead; use `provision` for ordinary tool updates.
+
+- **Provisioning:** use `provision` to refresh tools; `up` retries incomplete setup.
+  Completion is recorded only after success. Setup initializes missing repositories;
+  package installation can apply the API's normal development migrations.
+- **SSH/editors:** `ssh-config --install` discovers the current IP; `ssh`/`guest`
+  refresh it automatically. Check `ssh oc-dev 'node --version'`. Provisioning never
+  copies host SSH identities or credential stores.
+- **Git:** inspect `ssh-add -l` on host/guest, forwarding approval and editor
+  `SSH_AUTH_SOCK`. SSH Git and `gh` API authentication are separate. HTTPS fallback
+  preserves existing remotes and skips unavailable private repositories. Verify
+  initial GitHub keys against [GitHub's fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
+- **Dependencies:** inspect `docker ps -a`, container logs, disk space and `.env`.
+  Run `oc-dependencies` in the guest. Resolve occupied forwarding ports by stopping
+  the other tunnel/process or changing both ports and application URLs.
+
+## Validation
+
+Offline checks cover configuration, 6.23 command ordering/project selection,
+resource/subnet collisions, interrupted setup, retries, existing-VM image server
+independence, SSH policy and the existing development flows:
 
 ```bash
 node --test scripts/init.test.mjs scripts/vm.test.mjs .vm/*.test.mjs
 shellcheck -S warning .vm/*.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
 ```
 
-For a live acceptance check on a KVM host: run setup from a fresh VM, connect through
-both editors, test approved forwarding and the unauthenticated HTTPS fallback,
-check the closing summary and CLI discovery, start frontend/API and
-auxiliary services, sign in, check an email and an upload, and run representative
-API/frontend tests. Add an uncommitted file and a database record, then verify that
-halt/up, reload, and reprovision preserve them. Verify that the VM uses its private
-NAT network and that editor port forwarding works. Record the actual
-Vagrant/provider/Docker and installed tool versions when reporting live results.
+**Live acceptance remains for your Incus 6.23 KVM host.** This Docker workspace has
+neither Incus nor `/dev/kvm`. Simulated tests do not validate guest boot, sharing,
+cloud-init or Docker runtime behavior. Record `incus version local:`, image
+fingerprint/serial and installed tools with your results.
 
-### Adding another provider later
-
-Guest scripts do not depend on libvirt device names. Add a separate provider block
-with its resource and disk controls, choose a compatible box build, and preserve
-configurable host-folder sharing and the dedicated SSH target with private NAT.
-Validate its root-disk growth, optional folder syncing, and SSH behavior before
-documenting it as supported. Virtiofs is not explicitly configured; adding it
-requires its host daemon and shared-memory lifecycle configuration.
-[Libvirt synced-folder options](https://vagrant-libvirt.github.io/vagrant-libvirt/examples.html)
+1. Run `doctor`; verify no project/pool/bridge/key is created. Run fresh `setup`;
+   confirm type `virtual-machine`, successful cloud-init and working Docker/tools.
+2. Connect with SSH, Orca and VS Code. Test forwarding approval/refusal and HTTPS
+   fallback. Run frontend/API, forward ports, sign in, test an email and upload.
+3. Write a harmless `/host-workspace` file as `ubuntu`, checking host content and
+   UID/GID. Stop, disable sharing, `up`, verify device/mount absence; re-enable.
+4. Add an uncommitted file, database record and guest credential. Verify persistence
+   across `stop`/`up`, `restart` and `provision`, including branches and remotes.
+5. Stop the existing VM; run `OC_VM_IMAGE=missing:ubuntu/24.04/cloud ./scripts/vm.sh up`.
+   It must start without contacting that unavailable image remote. Restore normal
+   settings afterward.
+6. Test a stopped snapshot and portable export/import on a disposable copy,
+   checking data and SSH trust; back up external shared files separately.

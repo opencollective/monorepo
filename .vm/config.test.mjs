@@ -1,7 +1,13 @@
 // Settings tests use an isolated launcher directory and explicit environments so
-// a developer's personal .vm.local.json and OC_VM_* overrides cannot affect CI.
+// a developer's personal .vm/.vm.local.json and OC_VM_* overrides cannot affect CI.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -11,12 +17,20 @@ function fixture(t, config = {}) {
   // Exercise the real JSON-loading boundary, including malformed value types.
   const root = mkdtempSync(join(tmpdir(), "oc-config-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeFileSync(join(root, ".vm.local.json"), JSON.stringify(config));
+  mkdirSync(join(root, ".vm"));
+  writeFileSync(join(root, ".vm/.vm.local.json"), JSON.stringify(config));
   return root;
 }
 
-test("default resources and box are reproducible", (t) => {
+test("default Incus resources and current image are explicit", (t) => {
   assert.deepEqual(loadSettings(fixture(t), {}), DEFAULTS);
+});
+
+test("tracked example settings load and match the supported defaults", (t) => {
+  const example = JSON.parse(
+    readFileSync(new URL("./.vm.local.example.json", import.meta.url), "utf8"),
+  );
+  assert.deepEqual(loadSettings(fixture(t, example), {}), DEFAULTS);
 });
 
 test("host-folder sharing defaults on and requires boolean configuration", (t) => {
@@ -62,6 +76,12 @@ test("environment overrides local resources", (t) => {
   const settings = loadSettings(root, { OC_VM_CPUS: "12" });
   assert.equal(settings.cpus, 12);
   assert.equal(settings.memory_mb, 16384);
+});
+
+test("local settings live in .vm and a legacy root-level file is ignored", (t) => {
+  const root = fixture(t, { cpus: 5 });
+  writeFileSync(join(root, ".vm.local.json"), JSON.stringify({ cpus: 9 }));
+  assert.equal(loadSettings(root, {}).cpus, 5);
 });
 
 // JavaScript coercion can turn booleans/null into resource numbers. These inputs
@@ -111,7 +131,7 @@ test("networks must fit entirely inside a private IPv4 range", (t) => {
     );
 });
 
-test("unsafe clone URLs, refs and libvirt names are rejected", (t) => {
+test("unsafe clone URLs, refs and Incus names are rejected", (t) => {
   for (const config of [
     { repo_url: "https://token@github.com/org/repo" },
     { repo_url: "file:///tmp/repo" },
@@ -120,6 +140,14 @@ test("unsafe clone URLs, refs and libvirt names are rejected", (t) => {
     { repo_ref: "-main" },
     { network_name: "name\nInjected" },
     { storage_pool: "../pool" },
+    { project: "default" },
+    { project: "other_project" },
+    { instance_name: "../vm" },
+    { network_name: "bridge-name-too-long" },
+    { image: "ubuntu/24.04" },
+    { box: "bento/ubuntu-24.04" },
+    { box_version: "202508.03.0" },
+    { provider: "libvirt" },
   ])
     assert.throws(() => loadSettings(fixture(t, config), {}));
 });

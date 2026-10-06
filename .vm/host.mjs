@@ -1,37 +1,18 @@
 #!/usr/bin/env node
-// Host-side Vagrant and SSH configuration. Agent identities are never managed.
-import {
-  accessSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+// Host-side Incus and SSH configuration. Host agent identities are never managed.
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { homedir, platform, arch } from "node:os";
-import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import { loadSettings } from "./config.mjs";
+import { createIncus } from "./incus.mjs";
+import { atomicWrite, stateDirectory } from "./state.mjs";
+export { atomicWrite } from "./state.mjs";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { command, isMain, main, shellQuote } from "./process.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ALIAS = "oc-dev";
-
-// Keep generated SSH files private and replace them in one rename so an editor
-// or SSH client never observes a half-written configuration.
-export function atomicWrite(path, content) {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const temporary = join(dirname(path), `.oc-vm-${randomUUID()}`);
-  try {
-    writeFileSync(temporary, content, { mode: 0o600, flag: "wx" });
-    renameSync(temporary, path);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}
 
 // OpenSSH config quoting differs from shell quoting; these values never go
 // through a shell. Reject newlines that could introduce another Host block.
@@ -42,7 +23,7 @@ export function sshQuote(value) {
 }
 
 export function renderSSH(raw, forwardAgent, knownHosts) {
-  // Keep Vagrant's discovered address, user and identity, but replace its trust
+  // Keep Incus's discovered address, user and dedicated identity, but replace its trust
   // and forwarding defaults. OpenSSH takes the first value for most options.
   const dropped = new Set([
     "host",
@@ -66,7 +47,7 @@ export function renderSSH(raw, forwardAgent, knownHosts) {
           !dropped.has(line.trim().split(/\s+/)[0].toLowerCase()),
       ),
   ];
-  // Vagrant’s IdentityFile authenticates to the VM. Approved forwarding uses
+  // The dedicated IdentityFile authenticates to the VM. Approved forwarding uses
   // the developer’s existing agent; trust persists across changing guest IPs.
   lines.push(
     `  ForwardAgent ${forwardAgent ? "yes" : "no"}`,
@@ -101,10 +82,15 @@ export function createHost({
   run = command,
   output = console.log,
   confirm = confirmPrompt,
+  runtime,
 } = {}) {
   const execute = (args, options = {}) =>
     run(args, { cwd: root, env, ...options });
-  const sshSettingsPath = join(root, ".vagrant/oc-ssh-settings.json");
+  const settings = loadSettings(root, env);
+  const stateDir = stateDirectory({ root, home, env, settings });
+  const incus =
+    runtime ?? createIncus({ root, settings, stateDir, run: execute, output });
+  const sshSettingsPath = join(stateDir, "ssh-settings.json");
 
   function forwardingApproved() {
     if (!existsSync(sshSettingsPath)) return false;
@@ -116,7 +102,7 @@ export function createHost({
       Object.keys(settings).some((key) => key !== "forward_agent")
     )
       throw new Error(
-        "Invalid .vagrant/oc-ssh-settings.json; expected a forward_agent boolean",
+        "Invalid host ssh-settings.json; expected a forward_agent boolean",
       );
     return settings.forward_agent;
   }
@@ -161,26 +147,20 @@ export function createHost({
     return approved;
   }
 
-  async function refreshSSH({ install = false, reset = false } = {}) {
-    // Discover current connection details instead of persisting a libvirt IP or
-    // guessing the location of Vagrant's generated private key.
-    const raw = execute(["vagrant", "ssh-config", "--host", ALIAS], {
-      capture: true,
-    }).stdout;
+  async function refreshSSH({
+    install = false,
+    reset = false,
+    announce = true,
+  } = {}) {
+    const raw = incus.connection();
     const sshDir = join(home, ".ssh");
     const knownHosts = join(sshDir, "oc-development-known_hosts");
     const config = renderSSH(raw, forwardingApproved(), knownHosts);
-    const local = join(root, ".vagrant/oc-ssh-config");
+    const local = join(stateDir, "ssh-config");
     atomicWrite(local, config);
-    // Recreation changes host keys. Show the fingerprint through Vagrant's
-    // managed connection before explicitly clearing this VM's trust record.
+    // Read fingerprints through the local daemon before resetting SSH trust.
     if (reset) {
-      execute([
-        "vagrant",
-        "ssh",
-        "-c",
-        "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
-      ]);
+      incus.fingerprint();
       output(
         "Verify this VM fingerprint before clearing the old oc-dev trust record.",
       );
@@ -205,18 +185,36 @@ export function createHost({
       if (!existing.split(/\r?\n/).includes(include))
         atomicWrite(mainConfig, `${include}\n\n${existing}`);
       atomicWrite(fragment, config);
-      output(
-        `Installed SSH alias ${ALIAS}; refresh after a VM IP/identity change.`,
-      );
-    } else {
+      if (announce)
+        output(
+          `Installed SSH alias ${ALIAS}; refresh after a VM IP/identity change.`,
+        );
+    } else if (announce) {
       output(config.trimEnd());
     }
     return local;
   }
 
+  function removeHostIntegration() {
+    const sshDir = join(home, ".ssh");
+    const fragment = join(sshDir, "oc-development.conf");
+    const knownHosts = join(sshDir, "oc-development-known_hosts");
+    const mainConfig = join(sshDir, "config");
+    if (existsSync(mainConfig)) {
+      const include = `Include ${sshQuote(fragment)}`;
+      const lines = readFileSync(mainConfig, "utf8").split(/\r?\n/);
+      const retained = lines.filter((line) => line.trim() !== include);
+      if (retained.length !== lines.length)
+        atomicWrite(mainConfig, retained.join("\n"));
+    }
+    rmSync(fragment, { force: true });
+    rmSync(knownHosts, { force: true });
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+
   async function ssh(args, tty = false) {
-    const local = join(root, ".vagrant/oc-ssh-config");
-    if (!existsSync(local)) await refreshSSH();
+    const local = join(stateDir, "ssh-config");
+    await refreshSSH({ install: true, announce: false });
     const sshArgs = ["ssh", "-F", local];
     // Guest onboarding needs a terminal for login prompts; ordinary remote
     // commands can run without one. Both use the same generated SSH policy.
@@ -226,58 +224,35 @@ export function createHost({
     execute(sshArgs);
   }
 
-  function doctor() {
-    // Read-only prerequisite checks: no VM creation, key generation, or login.
-    // Check both /dev/kvm access and the system libvirt connection used by Vagrant.
-    const failures = [];
-    output(`Host: ${platform()} ${arch()}`);
-    for (const tool of ["vagrant", "virsh", "ssh", "node"]) {
-      const found = (env.PATH ?? "")
-        .split(":")
-        .map((path) => join(path, tool))
-        .find((path) => {
-          try {
-            accessSync(path, constants.X_OK);
-            return true;
-          } catch {
-            return false;
-          }
-        });
-      output(`${tool}: ${found ?? "missing"}`);
-      if (!found) failures.push(tool);
-    }
-    if (platform() !== "linux" || arch() !== "x64")
-      failures.push("Linux x86_64 host");
-    if (Number(process.versions.node.split(".")[0]) < 20)
-      failures.push("Node.js 20 or newer");
-    try {
-      accessSync("/dev/kvm", constants.R_OK | constants.W_OK);
-    } catch {
-      failures.push("read/write access to /dev/kvm");
-    }
-    if (!failures.length) {
-      execute(["vagrant", "validate"]);
-      if (
-        !execute(["vagrant", "plugin", "list"], {
-          capture: true,
-        }).stdout.includes("vagrant-libvirt ")
-      )
-        failures.push("vagrant-libvirt plugin");
-      execute(["virsh", "-c", "qemu:///system", "list", "--all"]);
-    }
-    if (failures.length)
-      throw new Error(
-        `Missing prerequisites: ${failures.join(", ")}. See .vm/README.md.`,
-      );
-    output("Host prerequisites ready; boot and guest checks are separate.");
-  }
+  const doctor = () => incus.doctor();
 
   async function cli([action, ...args]) {
     switch (action) {
       case "doctor":
-        return doctor();
+      case "status":
+      case "stop":
+        if (args.length) throw new Error(`${action} takes no arguments`);
+        return incus[action]();
+      case "destroy":
+        if (args.length) throw new Error("destroy takes no arguments");
+        incus.destroy();
+        removeHostIntegration();
+        output(
+          "Removed launcher VM resources, SSH configuration, and private host state.",
+        );
+        return;
       case "up":
-        execute(["vagrant", "up", "--provider=libvirt"]);
+      case "provision":
+        if (args.length) throw new Error(`${action} takes no arguments`);
+        await incus.up({ forceProvision: action === "provision" });
+        return refreshSSH({ install: true });
+      case "retry-cloud-init":
+        if (args.length) throw new Error("retry-cloud-init takes no arguments");
+        await incus.up({ retryCloudInit: true });
+        return refreshSSH({ install: true });
+      case "restart":
+        if (args.length) throw new Error("restart takes no arguments");
+        await incus.restart();
         return refreshSSH({ install: true });
       case "ssh-forwarding":
         if (args.length) throw new Error("ssh-forwarding takes no arguments");
@@ -298,11 +273,12 @@ export function createHost({
         return ssh(args, true);
       default:
         throw new Error(
-          "Usage: scripts/vm.sh setup|doctor|up|ssh-forwarding|ssh-config|ssh|guest",
+          "Usage: scripts/vm.sh setup|doctor|up|stop|restart|status|destroy|provision|retry-cloud-init|ssh-forwarding|ssh-config|ssh|guest",
         );
     }
   }
   return {
+    stateDir,
     cli,
     ssh,
     refreshSSH,

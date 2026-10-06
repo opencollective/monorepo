@@ -15,21 +15,47 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { createHost, renderSSH } from "./host.mjs";
+import { createHost as realCreateHost, renderSSH } from "./host.mjs";
 import { createGuest, writeEnvDefaults } from "./guest.mjs";
 import { command } from "./process.mjs";
 
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), "oc-helper-test-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = mkdtempSync(join(tmpdir(), "oc-helper-test-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const root = join(directory, "launcher");
+  mkdirSync(root);
   return root;
 }
 const silent = () => {};
-// Representative permissive Vagrant defaults that the generated entry replaces.
+// Representative permissive Incus defaults that the generated entry replaces.
 const rawSSH =
-  "Host default\n  HostName 192.168.121.3\n  User vagrant\n  IdentityFile /tmp/vagrant-key\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ForwardAgent no\n";
+  "Host default\n  HostName 192.168.121.3\n  User ubuntu\n  IdentityFile /tmp/vm-key\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ForwardAgent no\n";
 
-test("OpenSSH resolves approved forwarding, Vagrant identity and persistent trust policy", (t) => {
+// Host policy tests isolate the provider behind its public interface. Real SSH
+// parsing and filesystem writes still run, with all state inside the fixture.
+function createHost(options) {
+  return realCreateHost({
+    home: options.root,
+    ...options,
+    env: { XDG_STATE_HOME: join(options.root, "../state"), ...options.env },
+    runtime: {
+      connection: () => rawSSH,
+      fingerprint: () =>
+        options.run?.([
+          "incus",
+          "exec",
+          "local:oc-dev",
+          "--",
+          "ssh-keygen",
+          "-lf",
+          "/etc/ssh/ssh_host_ed25519_key.pub",
+        ]),
+      ...options.runtime,
+    },
+  });
+}
+
+test("OpenSSH resolves approved forwarding, Incus identity and persistent trust policy", (t) => {
   const root = fixture(t);
   const config = renderSSH(rawSSH, true, join(root, "known hosts"));
   const path = join(root, "config");
@@ -42,7 +68,7 @@ test("OpenSSH resolves approved forwarding, Vagrant identity and persistent trus
   for (const line of [
     "forwardagent yes",
     "stricthostkeychecking accept-new",
-    "identityfile /tmp/vagrant-key",
+    "identityfile /tmp/vm-key",
     "hostkeyalias oc-dev",
   ])
     assert.ok(resolved.includes(line));
@@ -56,8 +82,6 @@ test("OpenSSH resolves approved forwarding, Vagrant identity and persistent trus
 
 test("remote command quoting preserves argument boundaries and blocks shell expansion", async (t) => {
   const root = fixture(t);
-  mkdirSync(join(root, ".vagrant"));
-  writeFileSync(join(root, ".vagrant/oc-ssh-config"), "");
   let invoked;
   const host = createHost({
     root,
@@ -71,7 +95,7 @@ test("remote command quoting preserves argument boundaries and blocks shell expa
   assert.deepEqual(invoked.slice(0, 4), [
     "ssh",
     "-F",
-    join(root, ".vagrant/oc-ssh-config"),
+    join(host.stateDir, "ssh-config"),
     "-t",
   ]);
   assert.equal(
@@ -306,20 +330,20 @@ test("host-key reset requires confirmation and does not erase trust when decline
     readFileSync(join(root, ".ssh/oc-development-known_hosts"), "utf8"),
     "trusted-key",
   );
-  assert.ok(existsSync(join(root, ".vagrant/oc-ssh-config")));
+  assert.ok(existsSync(join(host.stateDir, "ssh-config")));
 });
 
-test("forwarding is disabled by default and never inherits Vagrant's agent override", async (t) => {
+test("forwarding is disabled by default and never inherits Incus's agent override", async (t) => {
   const root = fixture(t);
   const host = createHost({
     root,
     home: root,
     env: {},
     output: silent,
-    run: () => ({
-      status: 0,
-      stdout: rawSSH + "  IdentityAgent /tmp/other-agent\n  ForwardAgent yes\n",
-    }),
+    runtime: {
+      connection: () =>
+        rawSSH + "  IdentityAgent /tmp/other-agent\n  ForwardAgent yes\n",
+    },
   });
   assert.equal(host.forwardingApproved(), false);
   const path = await host.refreshSSH();
@@ -341,13 +365,6 @@ for (const [name, agentStatus, approval, expected, socket] of [
       " is persisted and SSH refreshes preserve the choice",
     async (t) => {
       const root = fixture(t);
-      mkdirSync(join(root, ".vagrant"));
-      // Starting from a previous approval verifies refusal or an unavailable
-      // agent actively records false rather than retaining stale consent.
-      writeFileSync(
-        join(root, ".vagrant/oc-ssh-settings.json"),
-        '{"forward_agent":true}',
-      );
       const calls = [];
       let prompts = 0;
       const host = createHost({
@@ -371,20 +388,25 @@ for (const [name, agentStatus, approval, expected, socket] of [
               stdout: "256 first identity\n2048 second identity\n",
             };
           }
-          assert.deepEqual(args, ["vagrant", "ssh-config", "--host", "oc-dev"]);
+          assert.fail("Unexpected host command");
           return { status: 0, stdout: rawSSH };
         },
       });
+      mkdirSync(host.stateDir, { recursive: true });
+      writeFileSync(
+        join(host.stateDir, "ssh-settings.json"),
+        '{"forward_agent":true}',
+      );
       assert.equal(await host.configureForwarding(), expected);
       assert.equal(prompts, socket && agentStatus === 0 ? 1 : 0);
       assert.deepEqual(
         JSON.parse(
-          readFileSync(join(root, ".vagrant/oc-ssh-settings.json"), "utf8"),
+          readFileSync(join(host.stateDir, "ssh-settings.json"), "utf8"),
         ),
         { forward_agent: expected },
       );
       assert.equal(
-        statSync(join(root, ".vagrant/oc-ssh-settings.json")).mode & 0o777,
+        statSync(join(host.stateDir, "ssh-settings.json")).mode & 0o777,
         0o600,
       );
       await host.refreshSSH({ install: true });
@@ -422,8 +444,8 @@ test("forwarding fails closed when agent inspection is unavailable", async (t) =
 
 test("malformed forwarding preferences are rejected", (t) => {
   const root = fixture(t);
-  mkdirSync(join(root, ".vagrant"));
   const host = createHost({ root, env: {}, output: silent });
+  mkdirSync(host.stateDir, { recursive: true });
   for (const value of [
     null,
     [],
@@ -433,11 +455,88 @@ test("malformed forwarding preferences are rejected", (t) => {
     { forward_agent: true, extra: true },
   ]) {
     writeFileSync(
-      join(root, ".vagrant/oc-ssh-settings.json"),
+      join(host.stateDir, "ssh-settings.json"),
       JSON.stringify(value),
     );
     assert.throws(() => host.forwardingApproved(), /Invalid/);
   }
-  writeFileSync(join(root, ".vagrant/oc-ssh-settings.json"), "not JSON");
+  writeFileSync(join(host.stateDir, "ssh-settings.json"), "not JSON");
   assert.throws(() => host.forwardingApproved());
+});
+
+test("guest commands refresh addresses without polluting their stdout", async (t) => {
+  const calls = [];
+  const host = createHost({
+    root: fixture(t),
+    output: () =>
+      assert.fail("SSH administration output must not mix with guest output"),
+    run: (args) => calls.push(args),
+  });
+  await host.cli(["ssh", "node", "/opt/oc-vm/guest.mjs", "git-status"]);
+  assert.equal(calls.at(-1).at(-1), "node /opt/oc-vm/guest.mjs git-status");
+});
+
+test("lifecycle commands dispatch to Incus and reject unexpected arguments", async (t) => {
+  const calls = [];
+  const runtime = Object.fromEntries(
+    ["doctor", "up", "stop", "restart", "status"].map((action) => [
+      action,
+      (options) => calls.push({ action, options }),
+    ]),
+  );
+  const host = createHost({ root: fixture(t), runtime, output: silent });
+  for (const action of [
+    "doctor",
+    "up",
+    "stop",
+    "restart",
+    "status",
+    "provision",
+  ]) {
+    await host.cli([action]);
+    await assert.rejects(
+      host.cli([action, "unexpected"]),
+      /takes no arguments/,
+    );
+  }
+  assert.deepEqual(
+    calls.map(({ action }) => action),
+    ["doctor", "up", "stop", "restart", "status", "up"],
+  );
+  assert.deepEqual(calls.at(-1).options, { forceProvision: true });
+  await host.cli(["retry-cloud-init"]);
+  assert.deepEqual(calls.at(-1), {
+    action: "up",
+    options: { retryCloudInit: true },
+  });
+  await assert.rejects(
+    host.cli(["retry-cloud-init", "unexpected"]),
+    /takes no arguments/,
+  );
+});
+
+test("approved host-key reset reads Incus fingerprint before clearing only dedicated trust", async (t) => {
+  const root = fixture(t);
+  mkdirSync(join(root, ".ssh"));
+  writeFileSync(join(root, ".ssh/oc-development-known_hosts"), "old trust");
+  const calls = [];
+  const host = createHost({
+    root,
+    home: root,
+    output: silent,
+    confirm: async () => true,
+    run: (args) => {
+      calls.push(args);
+      return { status: 0 };
+    },
+  });
+  await host.refreshSSH({ reset: true });
+  assert.equal(calls[0][0], "incus");
+  assert.deepEqual(calls[1], [
+    "ssh-keygen",
+    "-R",
+    "oc-dev",
+    "-f",
+    join(root, ".ssh/oc-development-known_hosts"),
+  ]);
 });

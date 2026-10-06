@@ -6,9 +6,8 @@ opencode.json
 .opencode
 .worktrees
 
-# Per-machine VM state, forwarding approval, and resource overrides stay local.
-.vagrant/
-.vm.local.json
+# Personal VM resource overrides stay local; Incus login/approval state lives outside this checkout.
+.vm/.vm.local.json
 
 # Skills are specific to each developer
 .agents/skills

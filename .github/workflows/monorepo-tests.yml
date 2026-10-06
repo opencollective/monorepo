@@ -35,7 +35,7 @@ jobs:
         run: node --test scripts/init.test.mjs scripts/vm.test.mjs .vm/*.test.mjs
 
   # Shell validation complements Node behavior tests. Live provisioning and
-  # editor acceptance remain manual checks on a Linux host with KVM/libvirt.
+  # editor acceptance remain manual checks on a Linux host with KVM/Incus.
   vm-checks:
     name: Development VM static checks
     runs-on: ubuntu-latest
