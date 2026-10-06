@@ -125,6 +125,27 @@ export function cloudConfig(
       disable_root: true,
       ...(preserveHostKeys ? { ssh_deletekeys: false } : {}),
       packages: ["openssh-server", "sudo"],
+      // The image may not include openssh-server. cloud-init's ssh_pwauth can
+      // create a minimal sshd_config before apt installs Ubuntu's defaults.
+      write_files: [
+        {
+          path: "/usr/local/lib/oc-vm/configure-ssh.sh",
+          permissions: "0644",
+          content: readFileSync(
+            new URL("./configure-ssh.sh", import.meta.url),
+            "utf8",
+          ),
+        },
+      ],
+      // Leave a failed package installation as the reported error if sshd was
+      // never installed; initial cloud-init recovery can then retry that stage.
+      runcmd: [
+        [
+          "bash",
+          "-c",
+          "if [ -x /usr/sbin/sshd ]; then bash /usr/local/lib/oc-vm/configure-ssh.sh; fi",
+        ],
+      ],
     },
     null,
     2,
@@ -703,9 +724,19 @@ export function createIncus({
     // NoCloud seed templates are normally applied on creation, so changing the
     // Incus config alone does not replace the existing guest's seed file.
     exec([
-      "python3",
+      "bash",
       "-c",
-      'from pathlib import Path; import sys; p = Path("/var/lib/cloud/seed/nocloud-net/user-data"); original = p.read_bytes(); backup = p.with_name("user-data.oc-vm-before-retry"); backup.exists() or backup.write_bytes(original); backup.chmod(0o600); p.write_text(sys.argv[1]); p.chmod(0o600)',
+      String.raw`set -euo pipefail
+seed=/var/lib/cloud/seed/nocloud-net/user-data
+backup=/var/lib/cloud/seed/nocloud-net/user-data.oc-vm-before-retry
+if [[ ! -e "$backup" ]]; then install -m 600 "$seed" "$backup"; fi
+chmod 600 "$backup"
+temporary=$(mktemp "$seed.oc-vm.XXXXXX")
+trap 'rm -f "$temporary"' EXIT
+printf '%s' "$1" > "$temporary"
+chmod 600 "$temporary"
+mv -f "$temporary" "$seed"`,
+      "oc-vm",
       userData,
     ]);
     setConfig({ "cloud-init.user-data": userData, [CLOUD_RETRY]: "true" });
@@ -804,6 +835,25 @@ export function createIncus({
     local(["restart", target]);
     await waitForAgent();
   }
+  async function repairSSH() {
+    const value = ownedInstance();
+    if (value.status !== "Running")
+      throw new Error(
+        "SSH repair requires a running VM; start it with up first",
+      );
+    await waitForAgent();
+    waitForCloudInit();
+    // Repair only guest SSH configuration; do not replace login/host keys or
+    // rerun system provisioning, which can resolve newer tool releases.
+    exec(["install", "-d", "-m", "755", "/usr/local/lib/oc-vm"]);
+    local([
+      "file",
+      "push",
+      join(root, ".vm/configure-ssh.sh"),
+      `${target}/usr/local/lib/oc-vm/configure-ssh.sh`,
+    ]);
+    exec(["bash", "/usr/local/lib/oc-vm/configure-ssh.sh"]);
+  }
   function stop() {
     const value = ownedInstance();
     if (value.status !== "Stopped") local(["stop", target]);
@@ -873,6 +923,7 @@ export function createIncus({
     connection,
     stop,
     restart,
+    repairSSH,
     status,
     destroy,
     fingerprint: () => {

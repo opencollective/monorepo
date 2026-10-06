@@ -21,6 +21,10 @@ find /opt/oc-vm -name '*.sh' -exec chmod 755 {} +
 printf '%s\n' "$1" > /etc/opencollective-vm.json
 chmod 644 /etc/opencollective-vm.json
 
+# Reapply the same validated SSH policy used during cloud-init. This also repairs
+# VMs created before the launcher supplied PAM and SFTP configuration explicitly.
+bash /opt/oc-vm/configure-ssh.sh
+
 # Include native build dependencies and headless-browser libraries used by the
 # existing development/test workflow, plus tools for root-disk growth below.
 apt-get update

@@ -254,6 +254,10 @@ export function createHost({
         if (args.length) throw new Error("restart takes no arguments");
         await incus.restart();
         return refreshSSH({ install: true });
+      case "repair-ssh":
+        if (args.length) throw new Error("repair-ssh takes no arguments");
+        await incus.repairSSH();
+        return refreshSSH({ install: true });
       case "ssh-forwarding":
         if (args.length) throw new Error("ssh-forwarding takes no arguments");
         return configureForwarding();
@@ -273,7 +277,7 @@ export function createHost({
         return ssh(args, true);
       default:
         throw new Error(
-          "Usage: scripts/vm.sh setup|doctor|up|stop|restart|status|destroy|provision|retry-cloud-init|ssh-forwarding|ssh-config|ssh|guest",
+          "Usage: scripts/vm.sh setup|doctor|up|stop|restart|status|destroy|provision|retry-cloud-init|repair-ssh|ssh-forwarding|ssh-config|ssh|guest",
         );
     }
   }

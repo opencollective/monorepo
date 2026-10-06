@@ -198,6 +198,9 @@ that host agent too. Starting them from a host session with the working
 `SSH_AUTH_SOCK` is one way to provide it.
 Use `./scripts/vm.sh ssh` if you prefer the launcher's standalone SSH config.
 
+Interactive SSH logins start in `/workspace`. This is configured by the guest's
+shell startup hook and applies to `ssh oc-dev` and `./scripts/vm.sh ssh`.
+
 ### Orca
 
 Install Orca on the host, then:
@@ -329,6 +332,7 @@ access to that VM; its remote TCP API is disabled.
 ./scripts/vm.sh status     # State, provisioning marker and image provenance
 ./scripts/vm.sh provision  # Reapply system provisioning without resetting work
 ./scripts/vm.sh retry-cloud-init # Recover failed initial cloud-init after repairing its cause
+./scripts/vm.sh repair-ssh # Repair guest SSH configuration through the Incus agent
 ```
 
 To change the forwarding choice without repeating the whole wizard, run:
@@ -544,6 +548,17 @@ a base image only removes the upstream image-server dependency.
 - **SSH/editors:** `ssh-config --install` discovers the current IP; `ssh`/`guest`
   refresh it automatically. Check `ssh oc-dev 'node --version'`. Provisioning never
   copies host SSH identities or credential stores.
+  If the server logs `User ubuntu not allowed because account is locked` and
+  `sshd -T` reports `usepam no`, run `./scripts/vm.sh repair-ssh`, then `ssh oc-dev`.
+  Some cloud images omit openssh-server; cloud-init can create a minimal
+  `sshd_config` before the package installs its Ubuntu defaults. The launcher
+  explicitly enables PAM and public-key login, disables password and
+  keyboard-interactive login, and supplies SFTP if absent. This policy runs on
+  fresh creation and reprovisioning. Repair uses the Incus guest agent, preserves
+  login/host keys and account password locks, and validates the configuration
+  before reloading SSH. It backs up the original main config at
+  `/etc/ssh/sshd_config.oc-vm-before`; validation failures restore the previous
+  configuration. It does not rerun system provisioning or reset cloud-init.
 - **Git:** inspect `ssh-add -l` on host/guest, forwarding approval and editor
   `SSH_AUTH_SOCK`. SSH Git and `gh` API authentication are separate. HTTPS fallback
   preserves existing remotes and skips unavailable private repositories. Verify

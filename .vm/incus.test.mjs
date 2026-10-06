@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { DEFAULTS } from "./config.mjs";
 import {
@@ -44,6 +45,7 @@ function fixture(t, overrides = {}) {
     mkdirSync(join(root, subdir), { recursive: true });
   mkdirSync(home);
   writeFileSync(join(root, ".vm/provision.sh"), "#!/bin/bash\n");
+  writeFileSync(join(root, ".vm/configure-ssh.sh"), "# fixture\n");
   writeFileSync(join(root, ".vm/.private"), "do not upload");
   for (const script of [
     "init.sh",
@@ -285,6 +287,11 @@ function fixture(t, overrides = {}) {
       }
       if (guest[1] === "/tmp/oc-vm/provision.sh" && model.fail === "provision")
         throw new Error("Interrupted provision");
+      if (
+        guest[1] === "/usr/local/lib/oc-vm/configure-ssh.sh" &&
+        model.fail === "ssh-repair"
+      )
+        throw new Error("SSH configuration validation failed");
     }
     return { status: 0, stdout: "" };
   }
@@ -360,6 +367,23 @@ test("6.23 baseline, subnet gateway and VM image selection", () => {
   assert.equal(cloud.users[0].primary_group, "oc-host");
   assert.ok(cloud.bootcmd[0].includes("2345"));
   assert.equal(cloud.ssh_pwauth, false);
+  assert.equal(cloud.users[0].lock_passwd, true);
+  assert.equal(
+    cloud.write_files[0].path,
+    "/usr/local/lib/oc-vm/configure-ssh.sh",
+  );
+  assert.equal(cloud.write_files[0].permissions, "0644");
+  assert.equal(
+    cloud.write_files[0].content,
+    readFileSync(new URL("./configure-ssh.sh", import.meta.url), "utf8"),
+  );
+  assert.deepEqual(cloud.runcmd, [
+    [
+      "bash",
+      "-c",
+      "if [ -x /usr/sbin/sshd ]; then bash /usr/local/lib/oc-vm/configure-ssh.sh; fi",
+    ],
+  ]);
   assert.throws(() => cloudConfig("ssh-ed25519 AAAA", 0, 1), /regular user/);
 });
 
@@ -460,6 +484,64 @@ test("existing disks survive offline stop/start, restart and reprovision", async
   );
   f.runtime().status();
   assert.ok(f.messages.at(-1).includes(fingerprint));
+});
+
+test("SSH repair uses the guest agent and preserves disks, identity and provisioning state", async (t) => {
+  const f = fixture(t);
+  await f.runtime().up();
+  const vm = f.vm();
+  const identity = readFileSync(join(f.stateDir, "identity"), "utf8");
+  f.calls.length = 0;
+  f.model.offline = true;
+  await f.runtime().repairSSH();
+  assert.equal(f.vm(), vm);
+  assert.equal(vm.persistentData, "checkout, database, credentials");
+  assert.equal(vm.config[readyKey], "true");
+  assert.equal(readFileSync(join(f.stateDir, "identity"), "utf8"), identity);
+  assert.equal(f.calls.filter(({ args }) => args.includes("push")).length, 1);
+  assert.ok(
+    f.calls.some(({ args }) =>
+      args.includes("/usr/local/lib/oc-vm/configure-ssh.sh"),
+    ),
+  );
+  assert.equal(
+    f.calls.some(
+      ({ args }) =>
+        args.includes("/tmp/oc-vm/provision.sh") ||
+        args.includes("restart") ||
+        args.includes("clean") ||
+        args.includes("image") ||
+        args[0] === "ssh" ||
+        args[0] === "ssh-keygen",
+    ),
+    false,
+  );
+  f.model.fail = "ssh-repair";
+  await assert.rejects(
+    f.runtime().repairSSH(),
+    /SSH configuration validation failed/,
+  );
+  assert.equal(vm.config[readyKey], "true");
+});
+
+test("SSH repair refuses an absent, stopped or unowned instance before uploads", async (t) => {
+  const f = fixture(t);
+  await assert.rejects(f.runtime().repairSSH(), /not found|does not exist/i);
+  await f.runtime().up();
+  f.vm().status = "Stopped";
+  f.calls.length = 0;
+  await assert.rejects(f.runtime().repairSSH(), /running VM/);
+  assert.equal(
+    f.calls.some(({ args }) => args.includes("push")),
+    false,
+  );
+  f.vm().status = "Running";
+  f.vm().config[ownerKey] = "someone-else";
+  await assert.rejects(f.runtime().repairSSH(), /not this launcher's/);
+  assert.equal(
+    f.calls.some(({ args }) => args.includes("push")),
+    false,
+  );
 });
 
 for (const [failure, stage] of [
@@ -613,6 +695,43 @@ test("explicit first-boot recovery preserves disks and identity and completes pr
   assert.equal(f.calls[clean].args.includes("--seed"), false);
 });
 
+test("cloud-init recovery shell writes user-data literally and preserves the original seed", async (t) => {
+  const f = await failedFirstBoot(t);
+  await f.runtime().up({ retryCloudInit: true });
+  const call = f.calls.find(({ args }) =>
+    args.some((arg) => arg.startsWith("set -euo pipefail\nseed=")),
+  );
+  assert.ok(call);
+  const guest = call.args.slice(call.args.indexOf("--") + 1);
+  assert.equal(guest[0], "bash");
+  const seedDirectory = join(f.root, "seed");
+  mkdirSync(seedDirectory);
+  const seed = join(seedDirectory, "user-data");
+  const backup = join(seedDirectory, "user-data.oc-vm-before-retry");
+  const marker = join(seedDirectory, "should-not-exist");
+  const original = "original seed\n";
+  writeFileSync(seed, original);
+  const script = guest[2].replaceAll(
+    "/var/lib/cloud/seed/nocloud-net",
+    seedDirectory,
+  );
+  const userData = `#cloud-config\nLiteral $(touch ${marker}) and backticks \`touch ${marker}\`\n`;
+  let result = spawnSync("bash", ["-c", script, "oc-vm", userData], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(seed, "utf8"), userData);
+  assert.equal(readFileSync(backup, "utf8"), original);
+  assert.equal(existsSync(marker), false);
+  assert.equal(statSync(seed).mode & 0o777, 0o600);
+  assert.equal(statSync(backup).mode & 0o777, 0o600);
+  result = spawnSync("bash", ["-c", script, "oc-vm", "replacement\n"], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(backup, "utf8"), original);
+});
+
 for (const failure of ["dns", "unrelated", "running", "already-provisioning"]) {
   test(`first-boot recovery refuses ${failure} before cleaning cloud-init`, async (t) => {
     const f = await failedFirstBoot(t);
@@ -628,7 +747,10 @@ for (const failure of ["dns", "unrelated", "running", "already-provisioning"]) {
     assert.equal(f.model.cloudInitCleaned, false);
     assert.equal(
       f.calls.some(
-        ({ args }) => args.includes("python3") || args.includes("push"),
+        ({ args }) =>
+          args.some((arg) =>
+            arg.includes("/var/lib/cloud/seed/nocloud-net/user-data"),
+          ) || args.includes("push"),
       ),
       false,
     );

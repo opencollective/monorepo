@@ -479,7 +479,7 @@ test("guest commands refresh addresses without polluting their stdout", async (t
 test("lifecycle commands dispatch to Incus and reject unexpected arguments", async (t) => {
   const calls = [];
   const runtime = Object.fromEntries(
-    ["doctor", "up", "stop", "restart", "status"].map((action) => [
+    ["doctor", "up", "stop", "restart", "status", "repairSSH"].map((action) => [
       action,
       (options) => calls.push({ action, options }),
     ]),
@@ -511,6 +511,12 @@ test("lifecycle commands dispatch to Incus and reject unexpected arguments", asy
   });
   await assert.rejects(
     host.cli(["retry-cloud-init", "unexpected"]),
+    /takes no arguments/,
+  );
+  await host.cli(["repair-ssh"]);
+  assert.equal(calls.at(-1).action, "repairSSH");
+  await assert.rejects(
+    host.cli(["repair-ssh", "unexpected"]),
     /takes no arguments/,
   );
 });

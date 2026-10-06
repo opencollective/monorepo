@@ -1,5 +1,12 @@
 # shellcheck shell=bash
 # Shared guest conveniences. Executables also have system PATH links for SSH.
+
+# SSH login starts in the developer's home. Enter the checkout for interactive
+# sessions; preserve command working directories and nested shells elsewhere.
+if [[ $- == *i* && -n "${SSH_CONNECTION:-}" && "$PWD" == "$HOME" && -d /workspace ]]; then
+  cd /workspace || return
+fi
+
 export NVM_DIR="$HOME/.nvm"
 if [[ -f "$NVM_DIR/nvm.sh" ]]; then
   # shellcheck disable=SC1091
