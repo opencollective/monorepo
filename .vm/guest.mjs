@@ -1,20 +1,7 @@
 #!/usr/bin/env node
-// Guest checkout/bootstrap operations; never reads host credentials.
-import {
-  appendFileSync,
-  chmodSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+// Guest Git configuration and development stack setup.
+import { appendFileSync, chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
 import { command, isMain, main } from "./process.mjs";
 
@@ -51,13 +38,8 @@ export function writeEnvDefaults(path, defaults) {
   }
 }
 
-// Provisioning invokes clone as ubuntu without an agent. The interactive host
-// wizard invokes initialize/stack later over SSH, with optional agent forwarding.
-// Injectable paths/process execution let tests avoid touching a real guest.
 export function createGuest({
   root = "/workspace",
-  assets = "/opt/oc-vm",
-  configPath = "/etc/opencollective-vm.json",
   env = process.env,
   run = command,
   wait = sleep,
@@ -66,224 +48,58 @@ export function createGuest({
   const execute = (args, options = {}) =>
     run(args, { cwd: root, env, ...options });
 
-  function clone() {
-    // Reprovisioning upgrades tooling, not working copies. Even a dirty checkout
-    // or a custom current branch is left entirely under developer control.
-    if (existsSync(join(root, ".git"))) {
-      output(
-        "Existing /workspace checkout preserved; no fetch, branch switch, or reset.",
+  function configureGit(protocol) {
+    if (!["ssh", "https"].includes(protocol))
+      throw new Error("git_protocol must be ssh or https");
+    // Only guest-global configuration is written; shared remotes stay intact.
+    for (const base of ["https://github.com/", "git@github.com:"]) {
+      const result = execute(
+        ["git", "config", "--global", "--unset-all", `url.${base}.insteadOf`],
+        { check: false },
       );
-      return;
+      if (result.status !== 0 && result.status !== 5)
+        throw new Error("Could not update guest Git URL configuration");
     }
-    if (readdirSync(root).length)
-      throw new Error(
-        "/workspace is nonempty and is not a Git checkout; refusing to overwrite it",
-      );
-    const config = JSON.parse(readFileSync(configPath, "utf8"));
-    // Failed downloads/ref lookups leave /workspace empty and can be retried.
-    const temporary = mkdtempSync(join(tmpdir(), "oc-vm-checkout-"));
-    const checkout = join(temporary, "repository");
-    try {
-      execute(
-        ["git", "clone", "--no-checkout", "--", config.repo_url, checkout],
-        { cwd: temporary },
-      );
-      const ref = config.repo_ref;
-      const branch = execute(
-        [
-          "git",
-          "show-ref",
-          "--verify",
-          "--quiet",
-          `refs/remotes/origin/${ref}`,
-        ],
-        { cwd: checkout, check: false },
-      );
-      // Branch refs become normal tracking branches; tags/commits stay detached
-      // rather than inventing a local branch with a misleading upstream.
-      if (branch.status === 0) {
-        execute(["git", "checkout", "-B", ref, `origin/${ref}`], {
-          cwd: checkout,
-        });
-        execute(["git", "branch", "--set-upstream-to", `origin/${ref}`, ref], {
-          cwd: checkout,
-        });
-      } else {
-        execute(["git", "fetch", "origin", ref], { cwd: checkout });
-        execute(["git", "checkout", "--detach", "FETCH_HEAD"], {
-          cwd: checkout,
-        });
-      }
-      // Move .git last so an interrupted transfer is not mistaken for a complete
-      // checkout on rerun. /tmp and /workspace may reside on different filesystems.
-      for (const name of readdirSync(checkout).sort(
-        (a, b) => Number(a === ".git") - Number(b === ".git"),
-      )) {
-        const source = join(checkout, name);
-        const destination = join(root, name);
-        try {
-          renameSync(source, destination);
-        } catch (error) {
-          if (error.code !== "EXDEV") throw error;
-          cpSync(source, destination, {
-            recursive: true,
-            dereference: false,
-            verbatimSymlinks: true,
-            errorOnExist: true,
-            force: false,
-          });
-          rmSync(source, { recursive: true });
-        }
-      }
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
-    }
-  }
-
-  function initialize() {
-    if (!existsSync(join(root, ".gitmodules")))
-      throw new Error(
-        "Missing /workspace/.gitmodules; check that the guest checkout is complete",
-      );
-    // Inspect a forwarded agent without loading keys. Probe public GitHub SSH
-    // access first: a loaded identity need not be registered with GitHub. Batch
-    // mode avoids passphrase prompts; first-use host keys use OpenSSH's TOFU
-    // policy while changed keys are still rejected.
-    const gitEnv = {
-      ...env,
-      GIT_TERMINAL_PROMPT: "0",
-      GIT_SSH_COMMAND:
-        "ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new",
-    };
-    const canRead = (url) =>
-      execute(["git", "ls-remote", url, "HEAD"], {
-        env: gitEnv,
-        quiet: true,
-        check: false,
-      }).status === 0;
-    let sshAuth = false;
-    let privateAccess = false;
-    if (env.SSH_AUTH_SOCK) {
-      try {
-        sshAuth =
-          execute(["ssh-add", "-l"], { quiet: true, check: false }).status ===
-            0 &&
-          canRead("git@github.com:opencollective/opencollective-api.git");
-        if (sshAuth)
-          privateAccess = canRead(
-            "git@github.com:opencollective/opencollective-security.git",
-          );
-      } catch {
-        // Missing inspection tools or unusable authentication do not block public development.
-      }
-    }
-    if (!sshAuth)
-      output(
-        "No working forwarded GitHub identity. Public repositories use HTTPS; Git pushes require separate authentication.",
-      );
-    if (!privateAccess)
-      output(
-        "Skipping private opencollective-security initialization: GitHub access is unavailable. Existing checkouts are preserved.",
-      );
-
-    // Let Git parse the service list. The security repository is the monorepo's
-    // private module; failure to read it must not block the public application.
-    const modules = execute(
-      [
-        "git",
-        "config",
-        "-f",
-        ".gitmodules",
-        "--get-regexp",
-        String.raw`^submodule\..*\.path$`,
-      ],
-      { capture: true },
-    ).stdout;
-    const missing = modules
-      .trim()
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .flatMap((line) => {
-        const [, key, path] = /^(\S+)\s+(.*)$/.exec(line);
-        return existsSync(join(root, path, ".git"))
-          ? []
-          : [{ name: key.slice("submodule.".length, -".path".length), path }];
-      });
-    const selected = missing.filter(
-      ({ path }) => path !== "opencollective-security" || privateAccess,
-    );
-    for (const { name } of selected) {
-      const original = execute(
-        [
+    if (protocol === "https") {
+      for (const prefix of ["git@github.com:", "ssh://git@github.com/"])
+        execute([
           "git",
           "config",
-          "-f",
-          ".gitmodules",
-          "--get",
-          `submodule.${name}.url`,
-        ],
-        { capture: true },
-      ).stdout.trim();
-      const url = sshAuth
-        ? original
-        : original.replace(/^git@github\.com:/, "https://github.com/");
-      if (!sshAuth && !url.startsWith("https://github.com/"))
-        throw new Error(`Cannot use GitHub HTTPS fallback for ${name}`);
-      // Override only new clones in the guest's local Git config. Submodule
-      // cloning then uses the selected transport without editing .gitmodules
-      // or changing any existing developer checkout's remote URL. Replacing a
-      // URL left by a failed clone also makes retries honor current access.
-      execute(["git", "config", "--local", `submodule.${name}.url`, url]);
+          "--global",
+          "--add",
+          "url.https://github.com/.insteadOf",
+          prefix,
+        ]);
+    } else {
+      execute([
+        "git",
+        "config",
+        "--global",
+        "--add",
+        "url.git@github.com:.insteadOf",
+        "https://github.com/",
+      ]);
     }
-    // The shared init script updates selected repos to main. Select only missing
-    // repos here so onboarding never switches an existing development branch.
-    if (selected.length)
-      execute(
-        [
-          "bash",
-          join(assets, "shared/init.sh"),
-          "--projects",
-          selected.map(({ name }) => name).join(","),
-        ],
-        { env: { ...gitEnv, OC_MONOREPO_ROOT: root } },
-      );
-    else
-      output(
-        "All accessible repositories already initialized; branches and local work preserved.",
-      );
-    // This guest-local report lets the host wizard include deferred Git access
-    // in its closing summary even if later optional login stages are completed.
-    const reportDir = join(root, "priv");
-    mkdirSync(reportDir, { recursive: true });
-    writeFileSync(
-      join(reportDir, "vm-git-status.json"),
-      JSON.stringify({
-        ssh_auth: sshAuth,
-        private_access: privateAccess,
-      }) + "\n",
-      { mode: 0o600 },
-    );
-  }
-
-  function gitStatus() {
-    const report = JSON.parse(
-      readFileSync(join(root, "priv/vm-git-status.json"), "utf8"),
-    );
-    return !report.ssh_auth
-      ? "https-public"
-      : report.private_access
-        ? "ssh-private"
-        : "ssh-public";
+    // Resolve gh from PATH at credential-request time, including Orca sessions.
+    const helper = "credential.https://github.com.helper";
+    execute(["git", "config", "--global", "--replace-all", helper, ""]);
+    execute([
+      "git",
+      "config",
+      "--global",
+      "--add",
+      helper,
+      "!gh auth git-credential",
+    ]);
   }
 
   async function stack() {
-    // Reuse the monorepo's npm/Compose workflow. Optional tools and watch repos
-    // are initialized too, but are not required to run the core application stack.
+    // Use the shared monorepo's npm and Compose workflows.
     const required = ["api", "frontend", "rest", "pdf", "images", "taxes"];
     for (const name of required) {
       if (!existsSync(join(root, `opencollective-${name}/package.json`)))
         throw new Error(
-          `Missing ${name}; run the repository onboarding stage first`,
+          `Missing /workspace/opencollective-${name}/package.json; prepare this service in the host checkout before setup`,
         );
     }
     const api = join(root, "opencollective-api");
@@ -296,7 +112,7 @@ export function createGuest({
     execute(
       [
         "bash",
-        join(assets, "shared/start-dependencies.sh"),
+        join(root, "scripts/start-dependencies.sh"),
         "--engine",
         "docker",
         "--detach",
@@ -356,7 +172,7 @@ export function createGuest({
     // API postinstall prepares the development database through its own scripts.
     // Keep that behavior instead of duplicating schema/migration logic here.
     execute(
-      ["bash", join(assets, "shared/install-dependencies.sh"), ...required],
+      ["bash", join(root, "scripts/install-dependencies.sh"), ...required],
       { env: { ...stackEnv, PG_HOST: "127.0.0.1" } },
     );
     const exists = execute(
@@ -423,21 +239,16 @@ export function createGuest({
     );
   }
 
-  return { clone, initialize, gitStatus, stack, doctor };
+  return { configureGit, stack, doctor };
 }
 
 if (isMain(import.meta.url))
   await main(() => {
     const [action, ...args] = process.argv.slice(2);
-    if (
-      !["clone", "initialize", "git-status", "stack", "doctor"].includes(
-        action,
-      ) ||
-      args.length
-    )
-      throw new Error(
-        "Usage: guest.mjs clone|initialize|git-status|stack|doctor",
-      );
-    if (action === "git-status") return console.log(createGuest().gitStatus());
-    return createGuest()[action]();
+    const guest = createGuest();
+    if (action === "configure-git" && args.length === 1)
+      return guest.configureGit(args[0]);
+    if (["stack", "doctor"].includes(action) && !args.length)
+      return guest[action]();
+    throw new Error("Usage: guest.mjs configure-git <ssh|https>|stack|doctor");
   });

@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -13,7 +12,6 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { DEFAULTS } from "./config.mjs";
 import {
@@ -22,6 +20,7 @@ import {
   createIncus,
   selectImage,
   versionSupported,
+  workspaceExecutionNeedsKernelRestart,
 } from "./incus.mjs";
 import { launcherIdentity, stateDirectory } from "./state.mjs";
 
@@ -46,9 +45,7 @@ function fixture(t, overrides = {}) {
   mkdirSync(home);
   writeFileSync(join(root, ".vm/provision.sh"), "#!/bin/bash\n");
   writeFileSync(join(root, ".vm/configure-ssh.sh"), "# fixture\n");
-  writeFileSync(join(root, ".vm/.private"), "do not upload");
   for (const script of [
-    "init.sh",
     "install-dependencies.sh",
     "start-dependencies.sh",
     "run.sh",
@@ -70,12 +67,11 @@ function fixture(t, overrides = {}) {
     agentReady: true,
     cloudInitStatus: 0,
     cloudInitError: null,
-    cloudInitReport: null,
-    cloudInitCleaned: false,
-    dnsReady: true,
     diagnosticsFail: false,
     fail: null,
     offline: false,
+    runningKernel: "6.17.0-1-generic",
+    hweKernel: "6.17.0-1-generic",
   };
   let clock = 0;
   const result = (metadata) => ({
@@ -164,7 +160,7 @@ function fixture(t, overrides = {}) {
             ? {
                 ...data,
                 status: "Stopped",
-                persistentData: "checkout, database, credentials",
+                persistentData: "database and tools",
               }
             : data;
         resources.set(`${path}/${data.name}`, value);
@@ -215,13 +211,8 @@ function fixture(t, overrides = {}) {
     }
     if (cli[0] === "stop") vm.status = "Stopped";
     if (cli[0] === "restart") {
-      if (model.fail === "recovery-restart")
-        throw new Error("Interrupted recovery restart");
       vm.status = "Running";
-      if (model.cloudInitCleaned) {
-        model.cloudInitStatus = 0;
-        model.cloudInitReport = null;
-      }
+      model.runningKernel = model.hweKernel;
     }
     if (cli[0] === "config" && cli[1] === "set")
       for (const assignment of cli.slice(3)) {
@@ -229,39 +220,22 @@ function fixture(t, overrides = {}) {
         vm.config[assignment.slice(0, at)] = assignment.slice(at + 1);
       }
     if (cli[0] === "config" && cli[1] === "device") {
-      if (cli[2] === "remove") delete vm.devices[cli[4]];
-      if (cli[2] === "add")
-        vm.devices[cli[4]] = {
-          type: cli[5],
-          ...Object.fromEntries(cli.slice(6).map((value) => value.split("="))),
-        };
       if (cli[2] === "set")
         for (const assignment of cli.slice(5)) {
           const [key, value] = assignment.split("=");
           vm.devices[cli[4]][key] = value;
         }
     }
-    if (cli[0] === "file" && model.fail === "upload")
-      throw new Error("Interrupted upload");
     if (cli[0] === "exec") {
       const guest = cli.slice(cli.indexOf("--") + 1);
+      if (guest[0] === "uname" && guest[1] === "-r")
+        return { status: 0, stdout: `${model.runningKernel}\n` };
+      if (guest.includes("configure-git") && model.fail === "git-config")
+        throw new Error("Guest Git configuration failed");
       if (guest[0] === "true" && !model.agentReady) return { status: 1 };
       if (guest[0] === "cloud-init" && model.fail === "cloud-init")
         throw new Error("Cloud-init failed");
       if (guest[0] === "cloud-init") {
-        if (guest[1] === "clean") {
-          model.cloudInitCleaned = true;
-          model.cloudInitStatus = 0;
-          model.cloudInitReport = { status: "not started", stage: null };
-          return { status: 0 };
-        }
-        if (guest.includes("--format=json"))
-          return {
-            status: model.cloudInitStatus,
-            stdout: JSON.stringify(
-              model.cloudInitReport ?? { status: "done", stage: null },
-            ),
-          };
         if (guest.includes("--wait") && model.cloudInitError)
           throw model.cloudInitError;
         if (!guest.includes("--wait") && model.diagnosticsFail)
@@ -273,10 +247,8 @@ function fixture(t, overrides = {}) {
             : "status: done\n",
         };
       }
-      if (guest[0] === "timeout" && !model.dnsReady && options.check !== false)
-        throw new Error("Guest DNS unavailable");
-      if (guest[0] === "test" && model.fail === "already-provisioning")
-        return { status: 1 };
+      if (guest[0] === "test" && model.fail === "mount")
+        throw new Error("Workspace mount unavailable");
       if (guest[0] === "tail") {
         if (model.diagnosticsFail)
           throw new Error("Guest diagnostics unavailable");
@@ -285,13 +257,11 @@ function fixture(t, overrides = {}) {
           stdout: "Temporary failure resolving archive.ubuntu.com\n",
         };
       }
-      if (guest[1] === "/tmp/oc-vm/provision.sh" && model.fail === "provision")
-        throw new Error("Interrupted provision");
       if (
-        guest[1] === "/usr/local/lib/oc-vm/configure-ssh.sh" &&
-        model.fail === "ssh-repair"
+        guest[1] === "/workspace/.vm/provision.sh" &&
+        model.fail === "provision"
       )
-        throw new Error("SSH configuration validation failed");
+        throw new Error("Interrupted provision");
     }
     return { status: 0, stdout: "" };
   }
@@ -368,23 +338,13 @@ test("6.23 baseline, subnet gateway and VM image selection", () => {
   assert.ok(cloud.bootcmd[0].includes("2345"));
   assert.equal(cloud.ssh_pwauth, false);
   assert.equal(cloud.users[0].lock_passwd, true);
-  assert.equal(
-    cloud.write_files[0].path,
-    "/usr/local/lib/oc-vm/configure-ssh.sh",
-  );
-  assert.equal(cloud.write_files[0].permissions, "0644");
-  assert.equal(
-    cloud.write_files[0].content,
-    readFileSync(new URL("./configure-ssh.sh", import.meta.url), "utf8"),
-  );
-  assert.deepEqual(cloud.runcmd, [
-    [
-      "bash",
-      "-c",
-      "if [ -x /usr/sbin/sshd ]; then bash /usr/local/lib/oc-vm/configure-ssh.sh; fi",
-    ],
-  ]);
+  assert.deepEqual(cloud.packages, ["openssh-server", "sudo"]);
   assert.throws(() => cloudConfig("ssh-ed25519 AAAA", 0, 1), /regular user/);
+  assert.equal(workspaceExecutionNeedsKernelRestart("6.8.0-79-generic"), true);
+  assert.equal(workspaceExecutionNeedsKernelRestart("6.10.0-1-generic"), true);
+  assert.equal(workspaceExecutionNeedsKernelRestart("6.11.0-1-generic"), false);
+  assert.equal(workspaceExecutionNeedsKernelRestart("7.0.0-1-generic"), false);
+  assert.throws(() => workspaceExecutionNeedsKernelRestart("unknown"), /parse/);
 });
 
 test("doctor inspects prerequisites without creating resources or keys", (t) => {
@@ -409,7 +369,7 @@ test("status reports an absent VM without creating resources", (t) => {
   assert.equal(existsSync(f.stateDir), false);
 });
 
-test("fresh VM config precedes first boot; provenance and private key stay on host", async (t) => {
+test("fresh VM mounts the writable workspace before provisioning and keeps its login key on host", async (t) => {
   const f = fixture(t);
   await f.runtime().up();
   const vm = f.vm();
@@ -419,7 +379,7 @@ test("fresh VM config precedes first boot; provenance and private key stay on ho
   assert.equal(vm.config[readyKey], "true");
   assert.equal(vm.config["limits.memory"], "43008MiB");
   assert.equal(vm.devices.root.size, "100GiB");
-  assert.equal(vm.devices.launcher.path, "/host-workspace");
+  assert.equal(vm.devices.workspace.path, "/workspace");
   assert.ok(vm.config["cloud-init.user-data"].startsWith("#cloud-config"));
   assert.equal(
     f.resources.get("/1.0/storage-pools/oc-development").driver,
@@ -440,25 +400,51 @@ test("fresh VM config precedes first boot; provenance and private key stay on ho
   );
   assert.ok(creation < f.calls.findIndex(({ args }) => args.includes("start")));
   const cloud = f.calls.findIndex(({ args }) => args.includes("cloud-init"));
-  assert.ok(cloud < f.calls.findIndex(({ args }) => args.includes("push")));
-  const uploads = f.calls.filter(({ args }) => args.includes("push"));
-  assert.ok(uploads.length >= 7);
+  const mount = f.calls.findIndex(
+    ({ args }) =>
+      args.includes("test") && args.includes("/workspace/.vm/provision.sh"),
+  );
+  const provision = f.calls.findIndex(
+    ({ args }) =>
+      args.includes("bash") &&
+      args.includes("/workspace/.vm/provision.sh") &&
+      args.at(-1) === "https",
+  );
+  assert.ok(cloud >= 0 && cloud < mount && mount < provision);
+  assert.equal(vm.devices.workspace.source, f.root);
+  assert.equal(vm.devices.workspace.readonly, undefined);
   assert.equal(
-    uploads.some(({ args }) =>
-      args.some((arg) => arg.includes("identity") || arg.endsWith(".private")),
-    ),
+    f.calls.some(({ args }) => args.includes("push")),
     false,
   );
   assert.equal(statSync(join(f.stateDir, "identity")).mode & 0o777, 0o600);
   assert.equal(statSync(f.stateDir).mode & 0o777, 0o700);
-  assert.equal(
-    JSON.parse(readFileSync(join(f.stateDir, "image.json"))).fingerprint,
-    fingerprint,
+  assert.equal(vm.config["user.oc-vm.image.fingerprint"], fingerprint);
+  assert.deepEqual(f.runtime().connection(), {
+    address: "192.168.121.10",
+    identity: join(f.stateDir, "identity"),
+  });
+});
+
+test("provisioning activates the HWE kernel before marking the VM ready", async (t) => {
+  const f = fixture(t);
+  f.model.runningKernel = "6.8.0-79-generic";
+  f.model.hweKernel = "6.17.0-1-generic";
+  await f.runtime().up();
+  const provision = f.calls.findIndex(
+    ({ args }) =>
+      args.includes("bash") && args.includes("/workspace/.vm/provision.sh"),
   );
-  assert.match(
-    f.runtime().connection(),
-    /HostName 192.168.121.10\n  User ubuntu/,
+  const restart = f.calls.findIndex(
+    ({ args }) => args.includes("restart") && args.includes("local:oc-dev"),
   );
+  const ready = f.calls.findIndex(
+    ({ args }) =>
+      args.includes("config") && args.includes("user.oc-vm.provisioned=true"),
+  );
+  assert.ok(provision >= 0 && provision < restart && restart < ready);
+  assert.equal(f.model.runningKernel, "6.17.0-1-generic");
+  assert.equal(f.vm().config[readyKey], "true");
 });
 
 test("existing disks survive offline stop/start, restart and reprovision", async (t) => {
@@ -472,82 +458,26 @@ test("existing disks survive offline stop/start, restart and reprovision", async
   await f.runtime().restart();
   await f.runtime().up({ forceProvision: true });
   assert.equal(f.vm(), original);
-  assert.equal(original.persistentData, "checkout, database, credentials");
+  assert.equal(original.persistentData, "database and tools");
   assert.equal(
     f.calls.some(({ args }) => args.includes("image")),
     false,
   );
   assert.equal(
-    f.calls.filter(({ args }) => args.includes("/tmp/oc-vm/provision.sh"))
-      .length,
+    f.calls.filter(
+      ({ args }) =>
+        args.includes("bash") && args.includes("/workspace/.vm/provision.sh"),
+    ).length,
     1,
   );
   f.runtime().status();
   assert.ok(f.messages.at(-1).includes(fingerprint));
 });
 
-test("SSH repair uses the guest agent and preserves disks, identity and provisioning state", async (t) => {
-  const f = fixture(t);
-  await f.runtime().up();
-  const vm = f.vm();
-  const identity = readFileSync(join(f.stateDir, "identity"), "utf8");
-  f.calls.length = 0;
-  f.model.offline = true;
-  await f.runtime().repairSSH();
-  assert.equal(f.vm(), vm);
-  assert.equal(vm.persistentData, "checkout, database, credentials");
-  assert.equal(vm.config[readyKey], "true");
-  assert.equal(readFileSync(join(f.stateDir, "identity"), "utf8"), identity);
-  assert.equal(f.calls.filter(({ args }) => args.includes("push")).length, 1);
-  assert.ok(
-    f.calls.some(({ args }) =>
-      args.includes("/usr/local/lib/oc-vm/configure-ssh.sh"),
-    ),
-  );
-  assert.equal(
-    f.calls.some(
-      ({ args }) =>
-        args.includes("/tmp/oc-vm/provision.sh") ||
-        args.includes("restart") ||
-        args.includes("clean") ||
-        args.includes("image") ||
-        args[0] === "ssh" ||
-        args[0] === "ssh-keygen",
-    ),
-    false,
-  );
-  f.model.fail = "ssh-repair";
-  await assert.rejects(
-    f.runtime().repairSSH(),
-    /SSH configuration validation failed/,
-  );
-  assert.equal(vm.config[readyKey], "true");
-});
-
-test("SSH repair refuses an absent, stopped or unowned instance before uploads", async (t) => {
-  const f = fixture(t);
-  await assert.rejects(f.runtime().repairSSH(), /not found|does not exist/i);
-  await f.runtime().up();
-  f.vm().status = "Stopped";
-  f.calls.length = 0;
-  await assert.rejects(f.runtime().repairSSH(), /running VM/);
-  assert.equal(
-    f.calls.some(({ args }) => args.includes("push")),
-    false,
-  );
-  f.vm().status = "Running";
-  f.vm().config[ownerKey] = "someone-else";
-  await assert.rejects(f.runtime().repairSSH(), /not this launcher's/);
-  assert.equal(
-    f.calls.some(({ args }) => args.includes("push")),
-    false,
-  );
-});
-
 for (const [failure, stage] of [
   ["start", "VM start"],
   ["cloud-init", "cloud-init"],
-  ["upload", "provisioning uploads"],
+  ["mount", "workspace mount"],
   ["provision", "system provisioning"],
 ]) {
   test(`interrupted ${failure} retains VM and resumes provisioning on retry`, async (t) => {
@@ -640,152 +570,6 @@ test("cloud-init timeout retains the original failure when diagnostics also fail
   );
 });
 
-function packageFailureReport() {
-  const completed = { finished: 140, errors: [], recoverable_errors: {} };
-  const errors = [
-    "('package_update_upgrade_install', ProcessExecutionError('apt failed'))",
-  ];
-  return {
-    status: "error",
-    stage: null,
-    errors,
-    "init-local": { ...completed },
-    init: { ...completed },
-    "modules-config": { ...completed },
-    "modules-final": { ...completed, errors },
-  };
-}
-
-async function failedFirstBoot(t) {
-  const f = fixture(t);
-  f.model.cloudInitStatus = 1;
-  f.model.cloudInitReport = packageFailureReport();
-  await assert.rejects(f.runtime().up(), /cloud-init failed/);
-  f.calls.length = 0;
-  return f;
-}
-
-test("explicit first-boot recovery preserves disks and identity and completes provisioning offline from the image server", async (t) => {
-  const f = await failedFirstBoot(t);
-  const vm = f.vm();
-  const key = readFileSync(join(f.stateDir, "identity"), "utf8");
-  f.model.offline = true;
-  await f.runtime().up({ retryCloudInit: true });
-  assert.equal(f.vm(), vm);
-  assert.equal(vm.persistentData, "checkout, database, credentials");
-  assert.equal(readFileSync(join(f.stateDir, "identity"), "utf8"), key);
-  assert.equal(vm.config[readyKey], "true");
-  assert.equal(vm.config["user.oc-vm.cloud-init.retry-pending"], "false");
-  const recovery = JSON.parse(
-    vm.config["cloud-init.user-data"].slice("#cloud-config\n".length),
-  );
-  assert.equal(recovery.ssh_deletekeys, false);
-  assert.match(recovery.bootcmd[0][5], /getent group oc-host/);
-  assert.equal(
-    f.calls.some(({ args }) => args.includes("image")),
-    false,
-  );
-  const clean = f.calls.findIndex(({ args }) => args.includes("clean"));
-  const restart = f.calls.findIndex(({ args }) => args.includes("restart"));
-  const provision = f.calls.findIndex(({ args }) =>
-    args.includes("/tmp/oc-vm/provision.sh"),
-  );
-  assert.ok(clean >= 0 && clean < restart && restart < provision);
-  assert.equal(f.calls[clean].args.includes("--logs"), false);
-  assert.equal(f.calls[clean].args.includes("--seed"), false);
-});
-
-test("cloud-init recovery shell writes user-data literally and preserves the original seed", async (t) => {
-  const f = await failedFirstBoot(t);
-  await f.runtime().up({ retryCloudInit: true });
-  const call = f.calls.find(({ args }) =>
-    args.some((arg) => arg.startsWith("set -euo pipefail\nseed=")),
-  );
-  assert.ok(call);
-  const guest = call.args.slice(call.args.indexOf("--") + 1);
-  assert.equal(guest[0], "bash");
-  const seedDirectory = join(f.root, "seed");
-  mkdirSync(seedDirectory);
-  const seed = join(seedDirectory, "user-data");
-  const backup = join(seedDirectory, "user-data.oc-vm-before-retry");
-  const marker = join(seedDirectory, "should-not-exist");
-  const original = "original seed\n";
-  writeFileSync(seed, original);
-  const script = guest[2].replaceAll(
-    "/var/lib/cloud/seed/nocloud-net",
-    seedDirectory,
-  );
-  const userData = `#cloud-config\nLiteral $(touch ${marker}) and backticks \`touch ${marker}\`\n`;
-  let result = spawnSync("bash", ["-c", script, "oc-vm", userData], {
-    encoding: "utf8",
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(seed, "utf8"), userData);
-  assert.equal(readFileSync(backup, "utf8"), original);
-  assert.equal(existsSync(marker), false);
-  assert.equal(statSync(seed).mode & 0o777, 0o600);
-  assert.equal(statSync(backup).mode & 0o777, 0o600);
-  result = spawnSync("bash", ["-c", script, "oc-vm", "replacement\n"], {
-    encoding: "utf8",
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(backup, "utf8"), original);
-});
-
-for (const failure of ["dns", "unrelated", "running", "already-provisioning"]) {
-  test(`first-boot recovery refuses ${failure} before cleaning cloud-init`, async (t) => {
-    const f = await failedFirstBoot(t);
-    if (failure === "dns") f.model.dnsReady = false;
-    if (failure === "unrelated")
-      f.model.cloudInitReport.errors.push("users_groups failed");
-    if (failure === "running") f.model.cloudInitReport.stage = "modules-final";
-    if (failure === "already-provisioning") f.model.fail = failure;
-    await assert.rejects(
-      f.runtime().up({ retryCloudInit: true }),
-      /cloud-init recovery failed/,
-    );
-    assert.equal(f.model.cloudInitCleaned, false);
-    assert.equal(
-      f.calls.some(
-        ({ args }) =>
-          args.some((arg) =>
-            arg.includes("/var/lib/cloud/seed/nocloud-net/user-data"),
-          ) || args.includes("push"),
-      ),
-      false,
-    );
-    assert.equal(f.vm().config[readyKey], "false");
-  });
-}
-
-test("interrupted cloud-init recovery resumes from the saved seed on ordinary up", async (t) => {
-  const f = await failedFirstBoot(t);
-  const vm = f.vm();
-  f.model.fail = "recovery-restart";
-  await assert.rejects(
-    f.runtime().up({ retryCloudInit: true }),
-    /Interrupted recovery restart/,
-  );
-  assert.equal(vm.config["user.oc-vm.cloud-init.retry-pending"], "true");
-  f.model.fail = null;
-  await f.runtime().up();
-  assert.equal(f.vm(), vm);
-  assert.equal(vm.config[readyKey], "true");
-});
-
-test("cloud-init recovery refuses initialized and absent VMs before resource changes", async (t) => {
-  const f = fixture(t);
-  await assert.rejects(f.runtime().up({ retryCloudInit: true }), /existing VM/);
-  assert.equal(f.writes().length, 0);
-  await f.runtime().up();
-  f.calls.length = 0;
-  await assert.rejects(
-    f.runtime().up({ retryCloudInit: true }),
-    /failed initial setup/,
-  );
-  assert.equal(f.writes().length, 0);
-});
-
 test("guest-agent readiness has a finite deadline and retains the VM", async (t) => {
   const f = fixture(t);
   f.model.agentReady = false;
@@ -843,7 +627,7 @@ test("an existing custom pool is used without modifying its configuration", asyn
   assert.equal(missing.writes().length, 0);
 });
 
-test("CPU, memory, sharing and disk growth apply only after stop; disk shrink fails", async (t) => {
+test("CPU, memory and disk growth apply only after stop; disk shrink fails", async (t) => {
   const f = fixture(t);
   await f.runtime().up();
   const vm = f.vm();
@@ -851,29 +635,18 @@ test("CPU, memory, sharing and disk growth apply only after stop; disk shrink fa
     cpus: 4,
     memory_mb: 16384,
     disk_gb: 250,
-    share_host_folder: false,
   });
   await assert.rejects(f.runtime().up(), /Stop the VM/);
   f.runtime().stop();
   await f.runtime().up();
   assert.equal(vm.config["limits.cpu"], "4");
   assert.equal(vm.config["limits.memory"], "16384MiB");
-  assert.equal(vm.devices.launcher, undefined);
+  assert.equal(vm.devices.workspace.path, "/workspace");
   assert.equal(vm.devices.root.size, "250GiB");
   assert.equal(vm.config[readyKey], "true");
-  assert.equal(vm.persistentData, "checkout, database, credentials");
-  f.settings.share_host_folder = true;
-  f.runtime().stop();
-  await f.runtime().up();
-  assert.equal(vm.devices.launcher.path, "/host-workspace");
+  assert.equal(vm.persistentData, "database and tools");
   f.settings.disk_gb = 200;
   await assert.rejects(f.runtime().up(), /cannot be shrunk/);
-});
-
-test("sharing disabled from creation omits the disk device", async (t) => {
-  const f = fixture(t, { share_host_folder: false });
-  await f.runtime().up();
-  assert.equal(f.vm().devices.launcher, undefined);
 });
 
 test("permission failures are not treated as absent resources", async (t) => {
@@ -964,4 +737,34 @@ test("incompatible owned network and project configuration fail without mutation
     );
     assert.equal(f.writes().length, 0);
   }
+});
+
+test("up applies Git protocol changes to an initialized VM without reinstalling tools", async (t) => {
+  const f = fixture(t);
+  await f.runtime().up();
+  f.settings.git_protocol = "ssh";
+  f.calls.length = 0;
+  await f.runtime().up();
+  const configuration = f.calls.find(({ args }) =>
+    args.includes("configure-git"),
+  );
+  assert.deepEqual(
+    configuration.args.slice(configuration.args.indexOf("--") + 1),
+    [
+      "sudo",
+      "-iu",
+      "ubuntu",
+      "node",
+      "/workspace/.vm/guest.mjs",
+      "configure-git",
+      "ssh",
+    ],
+  );
+  assert.equal(
+    f.calls.some(({ args }) => args.includes("/workspace/.vm/provision.sh")),
+    false,
+  );
+  f.model.fail = "git-config";
+  await assert.rejects(f.runtime().up(), /Git configuration failed/);
+  assert.equal(f.vm().config[readyKey], "true");
 });

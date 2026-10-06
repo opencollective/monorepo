@@ -5,7 +5,7 @@ export NVM_DIR="$HOME/.nvm"
 # jq works before Node is installed. The optional file argument lets checks use
 # a fixture without changing the installed guest configuration. Read first so a
 # JSON failure cannot disappear inside process substitution.
-versions_file="${1:-/opt/oc-vm/versions.json}"
+versions_file="${1:-/workspace/.vm/versions.json}"
 version_specs=$(jq -er '.nvm, .node, (.npm_packages | to_entries[] | "\(.key)@\(.value)")' "$versions_file")
 readarray -t versions <<< "$version_specs"
 nvm_tag="${versions[0]}"
@@ -26,14 +26,10 @@ fi
   exit 1
 }
 echo "Installing nvm $nvm_tag and Node ${versions[1]}"
-if [[ ! -d "$NVM_DIR/.git" ]]; then
-  [[ ! -e "$NVM_DIR" ]] || { echo "$NVM_DIR exists but is not an nvm Git checkout" >&2; exit 1; }
-  git clone --depth 1 --branch "$nvm_tag" https://github.com/nvm-sh/nvm.git "$NVM_DIR"
-else
-  # Preserve the existing nvm directory and update it to the resolved release.
-  git -C "$NVM_DIR" fetch --depth 1 origin "tag" "$nvm_tag"
-  git -C "$NVM_DIR" checkout --detach "$nvm_tag"
-fi
+# Download the public release independently of the guest Git transport.
+mkdir -p "$NVM_DIR"
+curl -fsSL "https://github.com/nvm-sh/nvm/archive/refs/tags/$nvm_tag.tar.gz" \
+  | tar -xz --strip-components=1 --no-same-owner -C "$NVM_DIR"
 # Load the selected nvm release before installing the pinned Node runtime.
 # shellcheck disable=SC1091
 source "$NVM_DIR/nvm.sh"

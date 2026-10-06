@@ -1,4 +1,4 @@
-// Exercise the real Bash installer with fake network, Git, nvm, and npm commands.
+// Exercise the real Bash installer with a local nvm archive and fake network, nvm, and npm commands.
 // Each fixture has its own HOME; no test downloads tools or changes the host nvm.
 import assert from "node:assert/strict";
 import {
@@ -29,21 +29,33 @@ function fixture(t, versions = declared) {
   const config = join(root, "versions.json");
   mkdirSync(bin);
   mkdirSync(home);
+  const source = join(root, "nvm-source");
+  const archive = join(root, "nvm.tar.gz");
+  mkdirSync(source);
+  writeFileSync(
+    join(source, "nvm.sh"),
+    'nvm() { node "$TOOL_FAKE" nvm "$@"; }\n',
+  );
+  const packed = spawnSync("tar", ["-czf", archive, "-C", root, "nvm-source"], {
+    encoding: "utf8",
+  });
+  assert.equal(packed.status, 0, packed.stderr);
   writeFileSync(trace, "");
   writeFileSync(config, JSON.stringify(versions));
   const fake = `#!/usr/bin/env node
-const { appendFileSync, mkdirSync, writeFileSync } = require('node:fs');
-const { basename, join } = require('node:path');
+const { appendFileSync, readFileSync } = require('node:fs');
+const { basename } = require('node:path');
 const args = process.argv.slice(2);
 const tool = basename(process.argv[1]) === 'fake-tool.cjs' ? args.shift() : basename(process.argv[1]);
 appendFileSync(process.env.TRACE, JSON.stringify({ tool, args }) + '\\n');
 if (tool === 'curl') {
-  if (process.env.LOOKUP_FAIL) process.exit(22);
-  console.log(process.env.RELEASE_JSON);
-} else if (tool === 'git' && args[0] === 'clone') {
-  const directory = args.at(-1);
-  mkdirSync(join(directory, '.git'), { recursive: true });
-  writeFileSync(join(directory, 'nvm.sh'), 'nvm() { node "$TOOL_FAKE" nvm "$@"; }\\n');
+  if (args.at(-1).endsWith('/releases/latest')) {
+    if (process.env.LOOKUP_FAIL) process.exit(22);
+    console.log(process.env.RELEASE_JSON);
+  } else {
+    if (process.env.ARCHIVE_FAIL) process.exit(22);
+    process.stdout.write(readFileSync(process.env.ARCHIVE));
+  }
 } else if (tool === 'npm' && args[0] === '--version') {
   console.log('11.0.0');
 }
@@ -65,6 +77,8 @@ if (tool === 'curl') {
           HOME: home,
           PATH: `${bin}:${process.env.PATH}`,
           TRACE: trace,
+          ARCHIVE: archive,
+          ARCHIVE_FAIL: "",
           TOOL_FAKE: tools,
           RELEASE_JSON: JSON.stringify({ tag_name: "v0.99.0" }),
           LOOKUP_FAIL: "",
@@ -84,15 +98,14 @@ test("latest resolves a stable nvm release and installs npm tools on pinned Node
     "-fsSL",
     "https://api.github.com/repos/nvm-sh/nvm/releases/latest",
   ]);
-  assert.deepEqual(calls.find(({ tool }) => tool === "git").args, [
-    "clone",
-    "--depth",
-    "1",
-    "--branch",
-    "v0.99.0",
-    "https://github.com/nvm-sh/nvm.git",
-    join(tools.home, ".nvm"),
+  assert.deepEqual(calls.filter(({ tool }) => tool === "curl")[1].args, [
+    "-fsSL",
+    "https://github.com/nvm-sh/nvm/archive/refs/tags/v0.99.0.tar.gz",
   ]);
+  assert.equal(
+    calls.some(({ tool }) => tool === "git"),
+    false,
+  );
   assert.deepEqual(
     calls.filter(({ tool }) => tool === "nvm").map(({ args }) => args),
     [
@@ -113,7 +126,7 @@ test("latest resolves a stable nvm release and installs npm tools on pinned Node
   ]);
 });
 
-test("reprovision resolves latest again and updates the existing nvm checkout", (t) => {
+test("reprovision refreshes nvm while preserving installed files", (t) => {
   const tools = fixture(t);
   assert.equal(tools.run().status, 0);
   const marker = join(tools.home, ".nvm", "preserved");
@@ -123,30 +136,17 @@ test("reprovision resolves latest again and updates the existing nvm checkout", 
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = tools.calls();
-  assert.equal(calls.filter(({ tool }) => tool === "curl").length, 2);
+  assert.equal(calls.filter(({ tool }) => tool === "curl").length, 4);
   assert.equal(
-    calls.filter(({ tool, args }) => tool === "git" && args[0] === "clone")
-      .length,
-    1,
+    calls.some(({ tool }) => tool === "git"),
+    false,
   );
-  assert.deepEqual(
+  assert.equal(
     calls
-      .filter(({ tool }) => tool === "git")
-      .slice(-2)
-      .map(({ args }) => args),
-    [
-      [
-        "-C",
-        join(tools.home, ".nvm"),
-        "fetch",
-        "--depth",
-        "1",
-        "origin",
-        "tag",
-        "v0.99.1",
-      ],
-      ["-C", join(tools.home, ".nvm"), "checkout", "--detach", "v0.99.1"],
-    ],
+      .filter(({ tool }) => tool === "curl")
+      .at(-1)
+      .args.at(-1),
+    "https://github.com/nvm-sh/nvm/archive/refs/tags/v0.99.1.tar.gz",
   );
   assert.equal(readFileSync(marker, "utf8"), "keep");
   assert.equal(
@@ -164,15 +164,11 @@ test("explicit nvm and npm versions bypass release lookup", (t) => {
   });
   const result = tools.run({ LOOKUP_FAIL: "1" });
   assert.equal(result.status, 0, result.stderr);
+  const downloads = tools.calls().filter(({ tool }) => tool === "curl");
+  assert.equal(downloads.length, 1);
   assert.equal(
-    tools.calls().some(({ tool }) => tool === "curl"),
-    false,
-  );
-  assert.ok(
-    tools
-      .calls()
-      .find(({ tool }) => tool === "git")
-      .args.includes("v0.40.8"),
+    downloads[0].args.at(-1),
+    "https://github.com/nvm-sh/nvm/archive/refs/tags/v0.40.8.tar.gz",
   );
   assert.deepEqual(tools.calls().find(({ tool }) => tool === "npm").args, [
     "install",
@@ -202,3 +198,13 @@ for (const [name, env, message] of [
     );
   });
 }
+
+test("a failed archive download stops before executing nvm or npm", (t) => {
+  const tools = fixture(t);
+  const result = tools.run({ ARCHIVE_FAIL: "1" });
+  assert.notEqual(result.status, 0);
+  assert.equal(
+    tools.calls().some(({ tool }) => ["git", "npm", "nvm"].includes(tool)),
+    false,
+  );
+});

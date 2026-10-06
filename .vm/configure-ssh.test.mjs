@@ -52,7 +52,6 @@ if (tool === 'sshd' && args.includes('-T')) {
     config,
     policy,
     original,
-    backup: `${config}.oc-vm-before`,
     calls: () =>
       readFileSync(trace, "utf8")
         .trim()
@@ -92,15 +91,13 @@ test("minimal guest SSH config enables PAM and SFTP and is safe to repeat", (t) 
     "PasswordAuthentication no",
     "KbdInteractiveAuthentication no",
     "PermitRootLogin no",
+    "AllowAgentForwarding no",
     "Subsystem sftp internal-sftp",
   ])
     assert.ok(readFileSync(f.policy, "utf8").includes(setting));
-  assert.equal(readFileSync(f.backup, "utf8"), f.original);
-  assert.equal(statSync(f.backup).mode & 0o777, 0o600);
   result = f.run();
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(f.config, "utf8"), first);
-  assert.equal(readFileSync(f.backup, "utf8"), f.original);
   assert.equal(statSync(f.config).mode & 0o777, 0o644);
   assert.ok(
     f
@@ -133,11 +130,11 @@ test("existing guest SFTP and SSH configuration are preserved", (t) => {
 
 test("guest SSH validation failure restores both files without reloading", (t) => {
   const f = fixture(t);
-  writeFileSync(f.policy, "# previous policy\n", { mode: 0o600 });
+  writeFileSync(f.policy, "# custom policy\n", { mode: 0o600 });
   const result = f.run({ FAIL: "validation" });
   assert.notEqual(result.status, 0);
   assert.equal(readFileSync(f.config, "utf8"), f.original);
-  assert.equal(readFileSync(f.policy, "utf8"), "# previous policy\n");
+  assert.equal(readFileSync(f.policy, "utf8"), "# custom policy\n");
   assert.equal(statSync(f.policy).mode & 0o777, 0o600);
   assert.equal(
     f.calls().some(({ tool }) => tool === "systemctl"),

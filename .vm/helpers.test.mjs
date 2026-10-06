@@ -7,7 +7,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -27,9 +26,7 @@ function fixture(t) {
   return root;
 }
 const silent = () => {};
-// Representative permissive Incus defaults that the generated entry replaces.
-const rawSSH =
-  "Host default\n  HostName 192.168.121.3\n  User ubuntu\n  IdentityFile /tmp/vm-key\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ForwardAgent no\n";
+const rawSSH = { address: "192.168.121.3", identity: "/tmp/vm-key" };
 
 // Host policy tests isolate the provider behind its public interface. Real SSH
 // parsing and filesystem writes still run, with all state inside the fixture.
@@ -40,24 +37,14 @@ function createHost(options) {
     env: { XDG_STATE_HOME: join(options.root, "../state"), ...options.env },
     runtime: {
       connection: () => rawSSH,
-      fingerprint: () =>
-        options.run?.([
-          "incus",
-          "exec",
-          "local:oc-dev",
-          "--",
-          "ssh-keygen",
-          "-lf",
-          "/etc/ssh/ssh_host_ed25519_key.pub",
-        ]),
       ...options.runtime,
     },
   });
 }
 
-test("OpenSSH resolves approved forwarding, Incus identity and persistent trust policy", (t) => {
+test("OpenSSH uses the VM identity and persistent trust policy", (t) => {
   const root = fixture(t);
-  const config = renderSSH(rawSSH, true, join(root, "known hosts"));
+  const config = renderSSH(rawSSH, join(root, "known hosts"));
   const path = join(root, "config");
   writeFileSync(path, config);
   // Parse with OpenSSH itself: string assertions alone would miss invalid quoting
@@ -66,18 +53,14 @@ test("OpenSSH resolves approved forwarding, Incus identity and persistent trust 
     quiet: true,
   }).stdout;
   for (const line of [
-    "forwardagent yes",
+    "forwardagent no",
     "stricthostkeychecking accept-new",
     "identityfile /tmp/vm-key",
     "hostkeyalias oc-dev",
   ])
     assert.ok(resolved.includes(line));
   assert.equal(config.includes("/dev/null"), false);
-  assert.equal(config.includes("IdentityAgent"), false);
-  assert.throws(
-    () => renderSSH(rawSSH, false, "/tmp/known\nHost *"),
-    /line breaks/,
-  );
+  assert.throws(() => renderSSH(rawSSH, "/tmp/known\nHost *"), /line breaks/);
 });
 
 test("remote command quoting preserves argument boundaries and blocks shell expansion", async (t) => {
@@ -102,107 +85,6 @@ test("remote command quoting preserves argument boundaries and blocks shell expa
     command(["bash", "-c", invoked.at(-1)], { capture: true }).stdout,
     literal,
   );
-});
-
-test("existing guest checkout is preserved without reading config or running Git", (t) => {
-  const root = fixture(t);
-  mkdirSync(join(root, ".git"));
-  createGuest({
-    root,
-    configPath: "/absent",
-    run: () => assert.fail("No command should run"),
-    output: silent,
-  }).clone();
-});
-
-test("guest clone tracks a branch and a failed ref lookup leaves an empty destination", (t) => {
-  const root = fixture(t);
-  const origin = join(root, "origin");
-  const checkout = join(root, "checkout");
-  mkdirSync(origin);
-  mkdirSync(checkout);
-  const run = (args, options) =>
-    command(args, {
-      ...options,
-      env: {
-        ...process.env,
-        GIT_CONFIG_NOSYSTEM: "1",
-        GIT_CONFIG_GLOBAL: "/dev/null",
-        GIT_CONFIG_COUNT: "0",
-      },
-      quiet: true,
-    });
-  run(["git", "init", "-b", "main"], { cwd: origin });
-  writeFileSync(join(origin, "README.md"), "fixture");
-  run(["git", "add", "README.md"], { cwd: origin });
-  run(
-    [
-      "git",
-      "-c",
-      "user.name=VM test",
-      "-c",
-      "user.email=vm@example.com",
-      "commit",
-      "-m",
-      "fixture",
-    ],
-    { cwd: origin },
-  );
-  const configPath = join(root, "settings.json");
-  writeFileSync(
-    configPath,
-    JSON.stringify({ repo_url: origin, repo_ref: "absent" }),
-  );
-  assert.throws(
-    () =>
-      createGuest({ root: checkout, configPath, run, output: silent }).clone(),
-    /git failed/,
-  );
-  assert.deepEqual(readdirSync(checkout), []);
-  writeFileSync(
-    configPath,
-    JSON.stringify({ repo_url: origin, repo_ref: "main" }),
-  );
-  createGuest({ root: checkout, configPath, run, output: silent }).clone();
-  assert.equal(readFileSync(join(checkout, "README.md"), "utf8"), "fixture");
-  assert.equal(
-    run(["git", "rev-parse", "--abbrev-ref", "@{upstream}"], {
-      cwd: checkout,
-    }).stdout.trim(),
-    "origin/main",
-  );
-});
-
-test("initialization selects only missing repositories and preserves existing branches", (t) => {
-  const root = fixture(t);
-  writeFileSync(
-    join(root, ".gitmodules"),
-    '[submodule "opencollective-api"]\npath = opencollective-api\nurl = git@github.com:opencollective/opencollective-api.git\n[submodule "opencollective-frontend"]\npath = opencollective-frontend\nurl = git@github.com:opencollective/opencollective-frontend.git\n',
-  );
-  mkdirSync(join(root, "opencollective-api"));
-  writeFileSync(join(root, "opencollective-api/.git"), "");
-  command(["git", "init", "-q", root], { quiet: true });
-  const calls = [];
-  const guest = createGuest({
-    root,
-    env: {},
-    output: silent,
-    run: (args, options) => {
-      if (args[0] === "git") return command(args, { ...options, quiet: true });
-      calls.push(args);
-      return { status: 0 };
-    },
-  });
-  guest.initialize();
-  assert.deepEqual(calls[0].slice(-2), [
-    "--projects",
-    "opencollective-frontend",
-  ]);
-  mkdirSync(join(root, "opencollective-frontend"));
-  writeFileSync(join(root, "opencollective-frontend/.git"), "");
-  calls.length = 0;
-  guest.initialize();
-  assert.deepEqual(calls, []);
 });
 
 test("environment defaults preserve exported user values and are idempotent", (t) => {
@@ -305,165 +187,6 @@ test("bootstrap accepts developer configuration and restores only an absent test
   }
 });
 
-test("host-key reset requires confirmation and does not erase trust when declined", async (t) => {
-  const root = fixture(t);
-  mkdirSync(join(root, ".ssh"));
-  writeFileSync(join(root, ".ssh/oc-development-known_hosts"), "trusted-key");
-  const calls = [];
-  const host = createHost({
-    root,
-    home: root,
-    env: {},
-    output: silent,
-    confirm: async () => false,
-    run: (args) => {
-      calls.push(args);
-      return { status: 0, stdout: rawSSH };
-    },
-  });
-  await assert.rejects(host.refreshSSH({ reset: true }), /cancelled/);
-  assert.equal(
-    calls.some((args) => args.includes("-R")),
-    false,
-  );
-  assert.equal(
-    readFileSync(join(root, ".ssh/oc-development-known_hosts"), "utf8"),
-    "trusted-key",
-  );
-  assert.ok(existsSync(join(host.stateDir, "ssh-config")));
-});
-
-test("forwarding is disabled by default and never inherits Incus's agent override", async (t) => {
-  const root = fixture(t);
-  const host = createHost({
-    root,
-    home: root,
-    env: {},
-    output: silent,
-    runtime: {
-      connection: () =>
-        rawSSH + "  IdentityAgent /tmp/other-agent\n  ForwardAgent yes\n",
-    },
-  });
-  assert.equal(host.forwardingApproved(), false);
-  const path = await host.refreshSSH();
-  const config = readFileSync(path, "utf8");
-  assert.ok(config.includes("ForwardAgent no"));
-  assert.equal(config.includes("IdentityAgent"), false);
-});
-
-for (const [name, agentStatus, approval, expected, socket] of [
-  ["approval", 0, true, true, "/tmp/host-agent"],
-  ["refusal", 0, false, false, "/tmp/host-agent"],
-  ["empty agent", 1, true, false, "/tmp/host-agent"],
-  ["unreachable agent", 2, true, false, "/tmp/host-agent"],
-  ["absent agent", 0, true, false, undefined],
-]) {
-  test(
-    "forwarding " +
-      name +
-      " is persisted and SSH refreshes preserve the choice",
-    async (t) => {
-      const root = fixture(t);
-      const calls = [];
-      let prompts = 0;
-      const host = createHost({
-        root,
-        home: root,
-        env: socket ? { SSH_AUTH_SOCK: socket } : {},
-        output: silent,
-        confirm: async (question) => {
-          prompts++;
-          assert.match(question, /Forward this host SSH agent/);
-          return approval;
-        },
-        run: (args, options) => {
-          calls.push(args);
-          if (args[0] === "ssh-add") {
-            assert.deepEqual(args, ["ssh-add", "-l"]);
-            assert.equal(options.env.SSH_AUTH_SOCK, socket);
-            // Multiple identities are allowed; no selected-key restriction exists.
-            return {
-              status: agentStatus,
-              stdout: "256 first identity\n2048 second identity\n",
-            };
-          }
-          assert.fail("Unexpected host command");
-          return { status: 0, stdout: rawSSH };
-        },
-      });
-      mkdirSync(host.stateDir, { recursive: true });
-      writeFileSync(
-        join(host.stateDir, "ssh-settings.json"),
-        '{"forward_agent":true}',
-      );
-      assert.equal(await host.configureForwarding(), expected);
-      assert.equal(prompts, socket && agentStatus === 0 ? 1 : 0);
-      assert.deepEqual(
-        JSON.parse(
-          readFileSync(join(host.stateDir, "ssh-settings.json"), "utf8"),
-        ),
-        { forward_agent: expected },
-      );
-      assert.equal(
-        statSync(join(host.stateDir, "ssh-settings.json")).mode & 0o777,
-        0o600,
-      );
-      await host.refreshSSH({ install: true });
-      await host.refreshSSH({ install: true });
-      assert.ok(
-        readFileSync(join(root, ".ssh/oc-development.conf"), "utf8").includes(
-          "ForwardAgent " + (expected ? "yes" : "no"),
-        ),
-      );
-      assert.equal(host.forwardingApproved(), expected);
-      assert.equal(
-        calls.filter((args) => args[0] === "ssh-add").length,
-        socket ? 1 : 0,
-      );
-    },
-  );
-}
-
-test("forwarding fails closed when agent inspection is unavailable", async (t) => {
-  const root = fixture(t);
-  const host = createHost({
-    root,
-    env: { SSH_AUTH_SOCK: "/tmp/agent" },
-    output: silent,
-    confirm: async () =>
-      assert.fail("No usable agent means no approval prompt"),
-    run: (args) => {
-      assert.deepEqual(args, ["ssh-add", "-l"]);
-      throw new Error("command unavailable");
-    },
-  });
-  assert.equal(await host.configureForwarding(), false);
-  assert.equal(host.forwardingApproved(), false);
-});
-
-test("malformed forwarding preferences are rejected", (t) => {
-  const root = fixture(t);
-  const host = createHost({ root, env: {}, output: silent });
-  mkdirSync(host.stateDir, { recursive: true });
-  for (const value of [
-    null,
-    [],
-    {},
-    { forward_agent: "false" },
-    { forward_agent: 1 },
-    { forward_agent: true, extra: true },
-  ]) {
-    writeFileSync(
-      join(host.stateDir, "ssh-settings.json"),
-      JSON.stringify(value),
-    );
-    assert.throws(() => host.forwardingApproved(), /Invalid/);
-  }
-  writeFileSync(join(host.stateDir, "ssh-settings.json"), "not JSON");
-  assert.throws(() => host.forwardingApproved());
-});
-
 test("guest commands refresh addresses without polluting their stdout", async (t) => {
   const calls = [];
   const host = createHost({
@@ -472,14 +195,14 @@ test("guest commands refresh addresses without polluting their stdout", async (t
       assert.fail("SSH administration output must not mix with guest output"),
     run: (args) => calls.push(args),
   });
-  await host.cli(["ssh", "node", "/opt/oc-vm/guest.mjs", "git-status"]);
-  assert.equal(calls.at(-1).at(-1), "node /opt/oc-vm/guest.mjs git-status");
+  await host.cli(["ssh", "node", "/workspace/.vm/guest.mjs", "doctor"]);
+  assert.equal(calls.at(-1).at(-1), "node /workspace/.vm/guest.mjs doctor");
 });
 
 test("lifecycle commands dispatch to Incus and reject unexpected arguments", async (t) => {
   const calls = [];
   const runtime = Object.fromEntries(
-    ["doctor", "up", "stop", "restart", "status", "repairSSH"].map((action) => [
+    ["doctor", "up", "stop", "restart", "status"].map((action) => [
       action,
       (options) => calls.push({ action, options }),
     ]),
@@ -504,45 +227,60 @@ test("lifecycle commands dispatch to Incus and reject unexpected arguments", asy
     ["doctor", "up", "stop", "restart", "status", "up"],
   );
   assert.deepEqual(calls.at(-1).options, { forceProvision: true });
-  await host.cli(["retry-cloud-init"]);
-  assert.deepEqual(calls.at(-1), {
-    action: "up",
-    options: { retryCloudInit: true },
-  });
-  await assert.rejects(
-    host.cli(["retry-cloud-init", "unexpected"]),
-    /takes no arguments/,
-  );
-  await host.cli(["repair-ssh"]);
-  assert.equal(calls.at(-1).action, "repairSSH");
-  await assert.rejects(
-    host.cli(["repair-ssh", "unexpected"]),
-    /takes no arguments/,
-  );
 });
 
-test("approved host-key reset reads Incus fingerprint before clearing only dedicated trust", async (t) => {
+test("SSH alias does not inherit host wildcard agent forwarding", async (t) => {
   const root = fixture(t);
   mkdirSync(join(root, ".ssh"));
-  writeFileSync(join(root, ".ssh/oc-development-known_hosts"), "old trust");
-  const calls = [];
+  writeFileSync(join(root, ".ssh/config"), "Host *\n  ForwardAgent yes\n");
+  const host = createHost({ root, output: silent });
+  await host.refreshSSH({ install: true });
+  const settings = command(
+    ["ssh", "-G", "-F", join(root, ".ssh/config"), "oc-dev"],
+    { quiet: true },
+  ).stdout;
+  assert.match(settings, /^forwardagent no$/m);
+});
+
+test("destroy removes only VM host integration and retains shared source files", async (t) => {
+  const root = fixture(t);
+  const source = join(root, "source.txt");
+  writeFileSync(source, "shared work");
+  mkdirSync(join(root, ".ssh"));
+  writeFileSync(
+    join(root, ".ssh/config"),
+    "Host personal\n  HostName example.com\n",
+  );
+  let destroyed = false;
   const host = createHost({
     root,
-    home: root,
     output: silent,
-    confirm: async () => true,
-    run: (args) => {
-      calls.push(args);
-      return { status: 0 };
+    runtime: {
+      destroy: () => {
+        destroyed = true;
+      },
     },
   });
-  await host.refreshSSH({ reset: true });
-  assert.equal(calls[0][0], "incus");
-  assert.deepEqual(calls[1], [
-    "ssh-keygen",
-    "-R",
-    "oc-dev",
-    "-f",
-    join(root, ".ssh/oc-development-known_hosts"),
-  ]);
+  await host.refreshSSH({ install: true });
+  await host.cli(["destroy"]);
+  assert.equal(destroyed, true);
+  assert.equal(readFileSync(source, "utf8"), "shared work");
+  assert.equal(
+    readFileSync(join(root, ".ssh/config"), "utf8").includes("Host personal"),
+    true,
+  );
+  assert.equal(existsSync(join(root, ".ssh/oc-development.conf")), false);
+  assert.equal(existsSync(host.stateDir), false);
+});
+
+test("missing service stops stack setup before commands or workspace writes", async (t) => {
+  const root = fixture(t);
+  await assert.rejects(
+    createGuest({
+      root,
+      run: () => assert.fail("No commands should run"),
+    }).stack(),
+    /prepare this service in the host checkout/,
+  );
+  assert.equal(existsSync(join(root, "opencollective-api")), false);
 });

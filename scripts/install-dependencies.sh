@@ -69,8 +69,7 @@ done
 
 # Get workspace root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The VM uses an installed copy of this script; target its working checkout via
-# OC_MONOREPO_ROOT while preserving script-relative behavior for other callers.
+# An explicit root can select another checkout.
 WORKSPACE_ROOT="${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 cd "$WORKSPACE_ROOT"
 

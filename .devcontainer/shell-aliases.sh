@@ -2,8 +2,7 @@
 # Open Collective monorepo shell shortcuts (sourced from ~/.bashrc in the devcontainer).
 
 _oc_monorepo_root() {
-  # The VM's installed script copies supply an explicit root. Otherwise walk
-  # upward so these shortcuts also work in service folders and nested worktrees.
+  # Honor an explicit root or walk upward from services and nested worktrees.
   if [[ -n "${OC_MONOREPO_ROOT:-}" ]]; then
     printf '%s\n' "$OC_MONOREPO_ROOT"
     return

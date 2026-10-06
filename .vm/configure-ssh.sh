@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure guest SSH even when cloud-init created a minimal sshd_config.
+# Configure and validate VM SSH access.
 set -euo pipefail
 
 # Run in a subshell so rollback traps and temporary state stay local. Tests source
@@ -35,9 +35,6 @@ configure_ssh() (
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
-  if [[ ! -e "${config}.oc-vm-before" ]]; then
-    install -m 600 "$transaction/config.before" "${config}.oc-vm-before"
-  fi
   cat > "$transaction/policy.new" <<'POLICY'
 # Managed by the Open Collective VM launcher.
 UsePAM yes
@@ -45,6 +42,7 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
+AllowAgentForwarding no
 POLICY
   chmod 644 "$transaction/policy.new"
   mv -f "$transaction/policy.new" "$policy"
@@ -72,7 +70,7 @@ POLICY
     settings=$(effective_settings)
   fi
   for required in 'usepam yes' 'pubkeyauthentication yes' 'passwordauthentication no' \
-    'kbdinteractiveauthentication no' 'permitrootlogin no'; do
+    'kbdinteractiveauthentication no' 'permitrootlogin no' 'allowagentforwarding no'; do
     if ! grep -Fxq "$required" <<< "$settings"; then
       echo 'Guest SSH configuration overrides the required login policy' >&2
       exit 1
@@ -80,7 +78,7 @@ POLICY
   done
   timeout 30 "$sshd" -t -f "$config"
   validated=true
-  # A reload failure leaves validated config in place for the next agent retry.
+  # A reload failure leaves validated config in place for the next invocation.
   timeout 30 "$service_command" reload-or-restart ssh
   echo 'Guest SSH ready: PAM enabled, key login enabled, password login disabled.'
 )

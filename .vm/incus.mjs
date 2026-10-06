@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   realpathSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -18,13 +17,20 @@ const OWNER = "user.oc-vm.owner";
 const READY = "user.oc-vm.provisioned";
 const IMAGE = "user.oc-vm.image.fingerprint";
 const SERIAL = "user.oc-vm.image.serial";
-const CLOUD_RETRY = "user.oc-vm.cloud-init.retry-pending";
 
 export function versionSupported(version) {
   const match = /^(\d+)\.(\d+)(?:\.|$|[-+])/.exec(version ?? "");
   return Boolean(
     match && (+match[1] > 6 || (+match[1] === 6 && +match[2] >= 23)),
   );
+}
+
+export function workspaceExecutionNeedsKernelRestart(release) {
+  const match = /^(\d+)\.(\d+)(?:\.|$)/.exec(release ?? "");
+  if (!match) throw new Error(`Cannot parse guest kernel release: ${release}`);
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major < 6 || (major === 6 && minor < 11);
 }
 
 export function ipv4Range(cidr) {
@@ -68,12 +74,7 @@ export function selectImage(images, selector) {
 
 // JSON is a YAML subset accepted by cloud-init; it preserves public keys and
 // argument arrays without interpolating values into shell fragments.
-export function cloudConfig(
-  publicKey,
-  uid,
-  gid,
-  { preserveHostKeys = false } = {},
-) {
+export function cloudConfig(publicKey, uid, gid) {
   if (
     !Number.isSafeInteger(uid) ||
     uid <= 0 ||
@@ -123,29 +124,7 @@ export function cloudConfig(
       ],
       ssh_pwauth: false,
       disable_root: true,
-      ...(preserveHostKeys ? { ssh_deletekeys: false } : {}),
       packages: ["openssh-server", "sudo"],
-      // The image may not include openssh-server. cloud-init's ssh_pwauth can
-      // create a minimal sshd_config before apt installs Ubuntu's defaults.
-      write_files: [
-        {
-          path: "/usr/local/lib/oc-vm/configure-ssh.sh",
-          permissions: "0644",
-          content: readFileSync(
-            new URL("./configure-ssh.sh", import.meta.url),
-            "utf8",
-          ),
-        },
-      ],
-      // Leave a failed package installation as the reported error if sshd was
-      // never installed; initial cloud-init recovery can then retry that stage.
-      runcmd: [
-        [
-          "bash",
-          "-c",
-          "if [ -x /usr/sbin/sshd ]; then bash /usr/local/lib/oc-vm/configure-ssh.sh; fi",
-        ],
-      ],
     },
     null,
     2,
@@ -446,12 +425,11 @@ export function createIncus({
       },
       eth0: { type: "nic", name: "eth0", network: settings.network_name },
     };
-    if (settings.share_host_folder)
-      devices.launcher = {
-        type: "disk",
-        source: realpathSync(root),
-        path: "/host-workspace",
-      };
+    devices.workspace = {
+      type: "disk",
+      source: realpathSync(root),
+      path: "/workspace",
+    };
     query("/1.0/instances", {
       project,
       method: "POST",
@@ -473,18 +451,6 @@ export function createIncus({
         source: { type: "image", fingerprint: image.fingerprint },
       },
     });
-    atomicWrite(
-      join(stateDir, "image.json"),
-      JSON.stringify(
-        {
-          source: settings.image,
-          fingerprint: image.fingerprint,
-          serial: image.properties?.serial ?? null,
-        },
-        null,
-        2,
-      ) + "\n",
-    );
     output(
       `Created ${project}/${name} from ${image.fingerprint} (${image.properties?.serial ?? "unknown serial"}).`,
     );
@@ -505,24 +471,19 @@ export function createIncus({
         "VM disks cannot be shrunk; restore disk_gb or create a separate VM",
       );
     const diskChanged = settings.disk_gb > Number(oldSize[1]);
-    const launcher = devices.launcher;
+    const workspace = devices.workspace;
     if (
-      launcher &&
-      (launcher.source !== realpathSync(root) ||
-        launcher.path !== "/host-workspace" ||
-        launcher.type !== "disk")
+      workspace?.source !== realpathSync(root) ||
+      workspace.path !== "/workspace" ||
+      workspace.type !== "disk"
     )
-      throw new Error("Existing launcher share differs from this checkout");
+      throw new Error("VM workspace share differs from this checkout");
     const resourcesChanged =
       value.config["limits.cpu"] !== String(settings.cpus) ||
       value.config["limits.memory"] !== `${settings.memory_mb}MiB`;
-    const sharingChanged = Boolean(launcher) !== settings.share_host_folder;
-    if (
-      (resourcesChanged || sharingChanged || diskChanged) &&
-      value.status !== "Stopped"
-    )
+    if ((resourcesChanged || diskChanged) && value.status !== "Stopped")
       throw new Error(
-        "Stop the VM with scripts/vm.sh stop before changing CPU, memory, disk, or sharing",
+        "Stop the VM with scripts/vm.sh stop before changing CPU, memory, or disk",
       );
     if (diskChanged) {
       setConfig({ [READY]: "false" });
@@ -541,20 +502,6 @@ export function createIncus({
         "limits.cpu": String(settings.cpus),
         "limits.memory": `${settings.memory_mb}MiB`,
       });
-    if (sharingChanged) {
-      if (settings.share_host_folder)
-        local([
-          "config",
-          "device",
-          "add",
-          target,
-          "launcher",
-          "disk",
-          `source=${realpathSync(root)}`,
-          "path=/host-workspace",
-        ]);
-      else local(["config", "device", "remove", target, "launcher"]);
-    }
   }
 
   async function waitForAgent() {
@@ -623,7 +570,7 @@ export function createIncus({
     throw failure;
   }
 
-  function provision() {
+  async function provision() {
     stage = "cloud-init";
     waitForCloudInit();
     exec([
@@ -635,136 +582,31 @@ export function createIncus({
       String(gid),
     ]);
     setConfig({ [READY]: "false" });
-    stage = "provisioning uploads";
-    exec(["install", "-d", "-m", "700", "/tmp/oc-vm", "/tmp/oc-vm/shared"]);
-    const uploads = readdirSync(join(root, ".vm"), { withFileTypes: true })
-      .filter((entry) => entry.isFile() && !entry.name.startsWith("."))
-      .map((entry) => [
-        join(root, ".vm", entry.name),
-        `/tmp/oc-vm/${entry.name}`,
-      ]);
-    for (const script of [
-      "init.sh",
-      "install-dependencies.sh",
-      "start-dependencies.sh",
-      "run.sh",
-      "test.sh",
-    ])
-      uploads.push([
-        join(root, "scripts", script),
-        `/tmp/oc-vm/shared/${script}`,
-      ]);
-    uploads.push([
-      join(root, ".devcontainer/shell-aliases.sh"),
-      "/tmp/oc-vm/shared/shell-aliases.sh",
-    ]);
-    for (const [source, destination] of uploads)
-      local(["file", "push", source, `${target}${destination}`]);
+    stage = "workspace mount";
+    exec(["test", "-f", "/workspace/.vm/provision.sh"]);
     stage = "system provisioning";
-    exec(["bash", "/tmp/oc-vm/provision.sh", JSON.stringify(settings)]);
+    exec(["bash", "/workspace/.vm/provision.sh", settings.git_protocol]);
+    stage = "HWE kernel activation";
+    let kernel = exec(["uname", "-r"], { capture: true }).stdout.trim();
+    if (workspaceExecutionNeedsKernelRestart(kernel)) {
+      output("Restarting the VM to activate its HWE kernel...");
+      local(["restart", target]);
+      await waitForAgent();
+      kernel = exec(["uname", "-r"], { capture: true }).stdout.trim();
+      if (workspaceExecutionNeedsKernelRestart(kernel))
+        throw new Error(
+          `The active kernel ${kernel} still cannot execute workspace scripts; inspect the installed HWE kernel and VM boot configuration`,
+        );
+    }
     setConfig({ [READY]: "true" });
   }
 
-  async function retryInitialCloudInit(value) {
-    stage = "cloud-init recovery";
-    if (value.config[READY] === "true")
-      throw new Error(
-        "Cloud-init recovery is limited to failed initial setup; use provision for an initialized VM",
-      );
-    const result = exec(["cloud-init", "status", "--format=json"], {
-      capture: true,
-      quiet: true,
-      check: false,
-      timeout: 10000,
-    });
-    const report = JSON.parse(result.stdout);
-    if (result.status === 0 && report.status === "done") {
-      setConfig({ [CLOUD_RETRY]: "false" });
-      return;
-    }
-    const pending = value.config[CLOUD_RETRY] === "true";
-    const packageFailure =
-      report.stage === null &&
-      report.status === "error" &&
-      report.errors?.length > 0 &&
-      report.errors.every(
-        (error) =>
-          typeof error === "string" &&
-          error.startsWith("('package_update_upgrade_install',"),
-      ) &&
-      ["init-local", "init", "modules-config"].every(
-        (stage) =>
-          report[stage]?.finished != null &&
-          !report[stage].errors?.length &&
-          !Object.keys(report[stage].recoverable_errors ?? {}).length,
-      ) &&
-      report["modules-final"]?.finished != null;
-    if (!packageFailure && !(pending && report.status === "not started"))
-      throw new Error(
-        "Cloud-init recovery requires a completed first boot with only package installation errors",
-      );
-    // A full cloud-init retry is limited to bootstrap, before our provisioner has
-    // installed services or credentials. Retain logs, machine ID, disks and keys.
-    const untouched = exec(["test", "!", "-e", "/opt/oc-vm/provision.sh"], {
-      quiet: true,
-      check: false,
-      timeout: 10000,
-    });
-    if (untouched.status !== 0)
-      throw new Error(
-        "System provisioning has already started; repair cloud-init without resetting it",
-      );
-    for (const hostname of ["archive.ubuntu.com", "security.ubuntu.com"])
-      exec(["timeout", "10", "getent", "ahostsv4", hostname], {
-        timeout: 15000,
-      });
-    const userData = cloudConfig(ensureIdentity(), uid, gid, {
-      preserveHostKeys: true,
-    });
-    // NoCloud seed templates are normally applied on creation, so changing the
-    // Incus config alone does not replace the existing guest's seed file.
-    exec([
-      "bash",
-      "-c",
-      String.raw`set -euo pipefail
-seed=/var/lib/cloud/seed/nocloud-net/user-data
-backup=/var/lib/cloud/seed/nocloud-net/user-data.oc-vm-before-retry
-if [[ ! -e "$backup" ]]; then install -m 600 "$seed" "$backup"; fi
-chmod 600 "$backup"
-temporary=$(mktemp "$seed.oc-vm.XXXXXX")
-trap 'rm -f "$temporary"' EXIT
-printf '%s' "$1" > "$temporary"
-chmod 600 "$temporary"
-mv -f "$temporary" "$seed"`,
-      "oc-vm",
-      userData,
-    ]);
-    setConfig({ "cloud-init.user-data": userData, [CLOUD_RETRY]: "true" });
-    output(
-      "Retrying initial cloud-init on the existing VM; preserving SSH host keys and boot logs.",
-    );
-    exec(["cloud-init", "clean"], { timeout: 30000 });
-    local(["restart", target], { timeout: 120000 });
-    await waitForAgent();
-    stage = "cloud-init recovery";
-    waitForCloudInit();
-    setConfig({ [CLOUD_RETRY]: "false" });
-  }
-
-  async function up({ forceProvision = false, retryCloudInit = false } = {}) {
+  async function up({ forceProvision = false } = {}) {
     try {
       stage = "prerequisites";
       doctor();
       stage = "instance checks";
       let value = ownedInstance(true);
-      if (retryCloudInit && !value)
-        throw new Error(
-          "Cloud-init recovery requires an existing VM; run up to create one",
-        );
-      if (retryCloudInit && value.config[READY] === "true")
-        throw new Error(
-          "Cloud-init recovery is limited to failed initial setup; use provision for an initialized VM",
-        );
       if (value && !existsSync(identity))
         throw new Error(
           `VM login key is missing from ${stateDir}; restore host state before connecting`,
@@ -788,9 +630,19 @@ mv -f "$temporary" "$seed"`,
           `VM is ${value.status}; resolve its state in Incus before retrying`,
         );
       await waitForAgent();
-      if (retryCloudInit || value.config[CLOUD_RETRY] === "true")
-        await retryInitialCloudInit(value);
-      if (forceProvision || value.config[READY] !== "true") provision();
+      if (forceProvision || value.config[READY] !== "true") await provision();
+      else {
+        stage = "Git configuration";
+        exec([
+          "sudo",
+          "-iu",
+          "ubuntu",
+          "node",
+          "/workspace/.vm/guest.mjs",
+          "configure-git",
+          settings.git_protocol,
+        ]);
+      }
       output(`VM ready: ${project}/${name}`);
     } catch (error) {
       throw new Error(
@@ -827,32 +679,13 @@ mv -f "$temporary" "$seed"`,
         "VM must have one management IPv4 address; run scripts/vm.sh up first",
       );
     const address = matches[0];
-    return `Host oc-dev\n  HostName ${address}\n  User ubuntu\n  IdentityFile "${identity.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"\n`;
+    return { address, identity };
   }
 
   async function restart() {
     ownedInstance();
     local(["restart", target]);
     await waitForAgent();
-  }
-  async function repairSSH() {
-    const value = ownedInstance();
-    if (value.status !== "Running")
-      throw new Error(
-        "SSH repair requires a running VM; start it with up first",
-      );
-    await waitForAgent();
-    waitForCloudInit();
-    // Repair only guest SSH configuration; do not replace login/host keys or
-    // rerun system provisioning, which can resolve newer tool releases.
-    exec(["install", "-d", "-m", "755", "/usr/local/lib/oc-vm"]);
-    local([
-      "file",
-      "push",
-      join(root, ".vm/configure-ssh.sh"),
-      `${target}/usr/local/lib/oc-vm/configure-ssh.sh`,
-    ]);
-    exec(["bash", "/usr/local/lib/oc-vm/configure-ssh.sh"]);
   }
   function stop() {
     const value = ownedInstance();
@@ -923,12 +756,7 @@ mv -f "$temporary" "$seed"`,
     connection,
     stop,
     restart,
-    repairSSH,
     status,
     destroy,
-    fingerprint: () => {
-      ownedInstance();
-      exec(["ssh-keygen", "-lf", "/etc/ssh/ssh_host_ed25519_key.pub"]);
-    },
   };
 }

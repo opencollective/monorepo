@@ -2,8 +2,8 @@
 # Host-side VM administration only. Project code runs in the guest.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Setup stays in Bash for its interactive wizard; all other administration goes
-# through the Node helper. exec preserves terminal input and the final exit code.
+# Setup uses Bash prompts; other administration uses the Node helper.
+# exec preserves terminal input and the final exit code.
 if [[ "${1:-}" == setup ]]; then
   shift
   exec bash "$SCRIPT_DIR/../.vm/setup.sh" "$@"

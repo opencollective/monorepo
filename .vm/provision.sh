@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs as root through Incus, without a forwarded SSH agent.
+# Runs as root through Incus against the shared workspace.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
@@ -10,26 +10,17 @@ export DEBIAN_FRONTEND=noninteractive
   exit 1
 }
 
-# Incus uploads these provisioning assets through the guest agent. Keep a guest-local
-# copy for later onboarding; no synced folder is needed to run shared scripts.
-install -d -m 755 /opt/oc-vm
-cp -R /tmp/oc-vm/. /opt/oc-vm/
-find /opt/oc-vm -type d -exec chmod 755 {} +
-find /opt/oc-vm -name '*.sh' -exec chmod 755 {} +
-# Save validated resource/checkout settings. Host forwarding approval is separate
-# and is never uploaded as a provisioning input.
-printf '%s\n' "$1" > /etc/opencollective-vm.json
-chmod 644 /etc/opencollective-vm.json
+sudo -iu ubuntu test -w /workspace
 
-# Reapply the same validated SSH policy used during cloud-init. This also repairs
-# VMs created before the launcher supplied PAM and SFTP configuration explicitly.
-bash /opt/oc-vm/configure-ssh.sh
+# Configure VM SSH access before the host connects.
+bash /workspace/.vm/configure-ssh.sh
 
 # Include native build dependencies and headless-browser libraries used by the
 # existing development/test workflow, plus tools for root-disk growth below.
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg git openssh-client \
+  linux-generic-hwe-24.04 \
   build-essential pkg-config jq unzip zip rsync ripgrep tmux vim less zsh \
   postgresql-client-16 cloud-guest-utils e2fsprogs xfsprogs lvm2 \
   libgtk-3-0t64 libgbm-dev libnotify-dev libnss3 libxss1 libasound2t64 \
@@ -89,32 +80,23 @@ systemctl enable --now docker
 # System-level PATH links make Node and agents usable in Orca/noninteractive SSH.
 # Install under the developer's nvm directory, not root's. PATH links are needed
 # because noninteractive SSH/Orca processes may never source shell startup files.
-sudo -iu ubuntu bash /opt/oc-vm/install-tools.sh
-node_version=$(jq -er '.node' /opt/oc-vm/versions.json)
+sudo -iu ubuntu bash /workspace/.vm/install-tools.sh
+node_version=$(jq -er '.node' /workspace/.vm/versions.json)
 for executable in node npm npx codex opencode eslint prettier tsc pm2; do
   target="/home/ubuntu/.nvm/versions/node/v$node_version/bin/$executable"
   [[ -e "$target" ]] || { echo "Missing installed executable: $target" >&2; exit 1; }
   ln -sfn "$target" "/usr/local/bin/$executable"
 done
 
-# Refuse an unexpected owner instead of recursively chowning someone else's data.
-# clone preserves an existing checkout and uses public HTTPS on the first boot.
-if [[ ! -e /workspace ]]; then
-  install -d -o ubuntu -g "$(id -gn ubuntu)" /workspace
-fi
-[[ "$(stat -c %U /workspace)" == ubuntu ]] || {
-  echo '/workspace already exists with another owner; resolve it before provisioning.' >&2
-  exit 1
-}
-sudo -iu ubuntu node /opt/oc-vm/guest.mjs clone
+sudo -iu ubuntu node /workspace/.vm/guest.mjs configure-git "$1"
 # Both interactive shells and login shells get the same guest conveniences.
 # Append the source line once so repeated provisioning does not duplicate hooks.
 for shell_file in /home/ubuntu/.bashrc /home/ubuntu/.profile; do
   touch "$shell_file"
-  if ! rg -qF 'source /opt/oc-vm/user-shell.sh' "$shell_file"; then
-    printf '\nsource /opt/oc-vm/user-shell.sh\n' >> "$shell_file"
+  if ! rg -qF 'source /workspace/.vm/user-shell.sh' "$shell_file"; then
+    printf '\nsource /workspace/.vm/user-shell.sh\n' >> "$shell_file"
   fi
   chown "ubuntu:$(id -gn ubuntu)" "$shell_file"
 done
 
-echo 'VM ready. Run ./scripts/vm.sh setup on the host to initialize repositories and credentials.'
+echo 'VM ready. Run ./scripts/vm.sh setup on the host to prepare the development stack.'

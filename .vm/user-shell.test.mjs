@@ -26,7 +26,7 @@ function fixture(t, { workspaceExists = true } = {}) {
   writeFileSync(
     hook,
     readFileSync(new URL("./user-shell.sh", import.meta.url), "utf8")
-      .replaceAll("/opt/oc-vm/shared/shell-aliases.sh", aliases)
+      .replaceAll("/workspace/.devcontainer/shell-aliases.sh", aliases)
       .replaceAll("/workspace", workspace),
   );
   return {

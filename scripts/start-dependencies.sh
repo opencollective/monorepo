@@ -3,8 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Provisioning installs this script outside the checkout. The override keeps it
-# using the guest's real API Compose files instead of /opt/oc-vm/shared/ siblings.
+# Resolve the checkout from this script or an explicit root.
 PROJECT_ROOT="${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 COMPOSE_DIR="$PROJECT_ROOT/opencollective-api/docker-compose"
 engine="${OC_CONTAINER_ENGINE:-}"

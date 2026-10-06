@@ -33,41 +33,6 @@ test("tracked example settings load and match the supported defaults", (t) => {
   assert.deepEqual(loadSettings(fixture(t, example), {}), DEFAULTS);
 });
 
-test("host-folder sharing defaults on and requires boolean configuration", (t) => {
-  assert.equal(loadSettings(fixture(t), {}).share_host_folder, true);
-  assert.equal(
-    loadSettings(fixture(t, { share_host_folder: false }), {})
-      .share_host_folder,
-    false,
-  );
-  for (const value of ["true", "false", 1, 0, null]) {
-    assert.throws(
-      () => loadSettings(fixture(t, { share_host_folder: value }), {}),
-      /share_host_folder must be a boolean/,
-    );
-  }
-});
-
-test("sharing environment overrides parse true/false without string truthiness", (t) => {
-  const root = fixture(t, { share_host_folder: true });
-  assert.equal(
-    loadSettings(root, { OC_VM_SHARE_HOST_FOLDER: "false" }).share_host_folder,
-    false,
-  );
-  assert.equal(
-    loadSettings(fixture(t, { share_host_folder: false }), {
-      OC_VM_SHARE_HOST_FOLDER: "true",
-    }).share_host_folder,
-    true,
-  );
-  for (const value of ["", "0", "1", "yes", "FALSE"]) {
-    assert.throws(
-      () => loadSettings(root, { OC_VM_SHARE_HOST_FOLDER: value }),
-      /must be true or false/,
-    );
-  }
-});
-
 test("environment overrides local resources", (t) => {
   const root = fixture(t, {
     cpus: 4,
@@ -76,12 +41,6 @@ test("environment overrides local resources", (t) => {
   const settings = loadSettings(root, { OC_VM_CPUS: "12" });
   assert.equal(settings.cpus, 12);
   assert.equal(settings.memory_mb, 16384);
-});
-
-test("local settings live in .vm and a legacy root-level file is ignored", (t) => {
-  const root = fixture(t, { cpus: 5 });
-  writeFileSync(join(root, ".vm.local.json"), JSON.stringify({ cpus: 9 }));
-  assert.equal(loadSettings(root, {}).cpus, 5);
 });
 
 // JavaScript coercion can turn booleans/null into resource numbers. These inputs
@@ -131,13 +90,8 @@ test("networks must fit entirely inside a private IPv4 range", (t) => {
     );
 });
 
-test("unsafe clone URLs, refs and Incus names are rejected", (t) => {
+test("invalid Incus names and image selectors are rejected", (t) => {
   for (const config of [
-    { repo_url: "https://token@github.com/org/repo" },
-    { repo_url: "file:///tmp/repo" },
-    { repo_url: "https://github.com/org/repo?token=secret" },
-    { repo_url: "https://github.com/org/repo#ref" },
-    { repo_ref: "-main" },
     { network_name: "name\nInjected" },
     { storage_pool: "../pool" },
     { project: "default" },
@@ -145,9 +99,25 @@ test("unsafe clone URLs, refs and Incus names are rejected", (t) => {
     { instance_name: "../vm" },
     { network_name: "bridge-name-too-long" },
     { image: "ubuntu/24.04" },
-    { box: "bento/ubuntu-24.04" },
-    { box_version: "202508.03.0" },
-    { provider: "libvirt" },
   ])
     assert.throws(() => loadSettings(fixture(t, config), {}));
+});
+
+test("Git protocol defaults to HTTPS and environment overrides local choice", (t) => {
+  assert.equal(loadSettings(fixture(t), {}).git_protocol, "https");
+  const root = fixture(t, { git_protocol: "ssh" });
+  assert.equal(loadSettings(root, {}).git_protocol, "ssh");
+  assert.equal(
+    loadSettings(root, { OC_VM_GIT_PROTOCOL: "https" }).git_protocol,
+    "https",
+  );
+  for (const value of ["http", "SSH", "", null, true])
+    assert.throws(
+      () => loadSettings(fixture(t, { git_protocol: value }), {}),
+      /git_protocol/,
+    );
+  assert.throws(
+    () => loadSettings(root, { OC_VM_GIT_PROTOCOL: "git" }),
+    /git_protocol/,
+  );
 });

@@ -1,23 +1,19 @@
-// Resource and checkout settings shared by Incus and the host launcher.
-// SSH forwarding approval lives separately in ignored per-VM state.
+// VM settings for the host launcher.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isMain, main } from "./process.mjs";
 
 export const DEFAULTS = Object.freeze({
-  provider: "incus/kvm",
   cpus: 8,
   memory_mb: 43008, // 42 GiB, expressed in MiB.
   disk_gb: 100,
-  share_host_folder: true,
   image: "images:ubuntu/24.04/cloud",
   project: "oc-development",
   instance_name: "oc-dev",
   storage_pool: "oc-development",
   network_name: "oc-development",
   network_address: "192.168.121.0/24",
-  repo_url: "https://github.com/opencollective/monorepo.git",
-  repo_ref: "main",
+  git_protocol: "https",
 });
 function localSettings(root) {
   const path = join(root, ".vm/.vm.local.json");
@@ -65,8 +61,7 @@ function validateNetwork(address) {
 
 export function loadSettings(root, env = process.env) {
   const local = localSettings(root);
-  // Precedence: environment > personal JSON > tracked defaults. Enumerate only
-  // declared resource/checkout settings; forwarding approval stays on the host.
+  // Precedence: environment > personal JSON > tracked defaults.
   const settings = Object.fromEntries(
     Object.entries(DEFAULTS).map(([key, value]) => [
       key,
@@ -88,18 +83,8 @@ export function loadSettings(root, env = process.env) {
       throw new Error(`${key} must be a positive integer`);
     settings[key] = Number(value);
   }
-  // Never use string truthiness for this isolation boundary: "false" is truthy
-  // in JavaScript. JSON uses booleans; the environment accepts only true/false.
-  if (env.OC_VM_SHARE_HOST_FOLDER !== undefined) {
-    if (!["true", "false"].includes(env.OC_VM_SHARE_HOST_FOLDER))
-      throw new Error("OC_VM_SHARE_HOST_FOLDER must be true or false");
-    settings.share_host_folder = env.OC_VM_SHARE_HOST_FOLDER === "true";
-  }
-  if (typeof settings.share_host_folder !== "boolean")
-    throw new Error("share_host_folder must be a boolean");
   for (const key of Object.keys(DEFAULTS).filter(
-    (key) =>
-      !["cpus", "memory_mb", "disk_gb", "share_host_folder"].includes(key),
+    (key) => !["cpus", "memory_mb", "disk_gb"].includes(key),
   )) {
     if (
       typeof settings[key] !== "string" ||
@@ -128,8 +113,6 @@ export function loadSettings(root, env = process.env) {
     throw new Error(
       "Use a dedicated project rather than the Incus default project",
     );
-  if (settings.provider !== "incus/kvm")
-    throw new Error("provider must be incus/kvm");
   if (
     !/^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(settings.image)
   )
@@ -137,23 +120,8 @@ export function loadSettings(root, env = process.env) {
       "image must be an Incus remote:alias or remote:fingerprint",
     );
   validateNetwork(settings.network_address);
-  // The initial public checkout needs no credentials. Embedded tokens would leak
-  // into provisioning arguments and the guest's saved settings file.
-  const url = new URL(settings.repo_url);
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    !url.hostname ||
-    url.pathname === "/"
-  )
-    throw new Error(
-      "repo_url must be an HTTPS URL without embedded credentials",
-    );
-  if (settings.repo_ref.startsWith("-"))
-    throw new Error("repo_ref cannot begin with a hyphen");
+  if (!["ssh", "https"].includes(settings.git_protocol))
+    throw new Error("git_protocol must be ssh or https");
   return settings;
 }
 

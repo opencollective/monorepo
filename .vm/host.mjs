@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// Host-side Incus and SSH configuration. Host agent identities are never managed.
+// Host-side Incus and SSH configuration.
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { loadSettings } from "./config.mjs";
 import { createIncus } from "./incus.mjs";
 import { atomicWrite, stateDirectory } from "./state.mjs";
-export { atomicWrite } from "./state.mjs";
 import { fileURLToPath } from "node:url";
-import { createInterface } from "node:readline/promises";
 import { command, isMain, main, shellQuote } from "./process.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -22,35 +20,13 @@ export function sshQuote(value) {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
-export function renderSSH(raw, forwardAgent, knownHosts) {
-  // Keep Incus's discovered address, user and dedicated identity, but replace its trust
-  // and forwarding defaults. OpenSSH takes the first value for most options.
-  const dropped = new Set([
-    "host",
-    "forwardagent",
-    "identityagent",
-    "stricthostkeychecking",
-    "userknownhostsfile",
-    "hostkeyalias",
-    "identitiesonly",
-    "forwardx11",
-    "serveraliveinterval",
-    "serveralivecountmax",
-  ]);
-  const lines = [
+export function renderSSH({ address, identity }, knownHosts) {
+  return [
     `Host ${ALIAS}`,
-    ...raw
-      .split(/\r?\n/)
-      .filter(
-        (line) =>
-          line.trim() &&
-          !dropped.has(line.trim().split(/\s+/)[0].toLowerCase()),
-      ),
-  ];
-  // The dedicated IdentityFile authenticates to the VM. Approved forwarding uses
-  // the developer’s existing agent; trust persists across changing guest IPs.
-  lines.push(
-    `  ForwardAgent ${forwardAgent ? "yes" : "no"}`,
+    `  HostName ${address}`,
+    "  User ubuntu",
+    `  IdentityFile ${sshQuote(identity)}`,
+    "  ForwardAgent no",
     "  IdentitiesOnly yes",
     "  ForwardX11 no",
     "  StrictHostKeyChecking accept-new",
@@ -58,30 +34,17 @@ export function renderSSH(raw, forwardAgent, knownHosts) {
     `  UserKnownHostsFile ${sshQuote(knownHosts)}`,
     "  ServerAliveInterval 30",
     "  ServerAliveCountMax 3",
-  );
-  return `${lines.join("\n")}\n`;
+    "",
+  ].join("\n");
 }
 
-async function confirmPrompt(question) {
-  const input = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    return (await input.question(`${question} [y/N] `)).toLowerCase() === "y";
-  } finally {
-    input.close();
-  }
-}
-
-// Parameters let regression tests exercise filesystem behavior without touching a real agent or VM.
+// Parameters let regression tests exercise filesystem behavior without touching a real VM.
 export function createHost({
   root = ROOT,
   home = homedir(),
   env = process.env,
   run = command,
   output = console.log,
-  confirm = confirmPrompt,
   runtime,
 } = {}) {
   const execute = (args, options = {}) =>
@@ -90,89 +53,13 @@ export function createHost({
   const stateDir = stateDirectory({ root, home, env, settings });
   const incus =
     runtime ?? createIncus({ root, settings, stateDir, run: execute, output });
-  const sshSettingsPath = join(stateDir, "ssh-settings.json");
-
-  function forwardingApproved() {
-    if (!existsSync(sshSettingsPath)) return false;
-    const settings = JSON.parse(readFileSync(sshSettingsPath, "utf8"));
-    if (
-      !settings ||
-      Array.isArray(settings) ||
-      typeof settings.forward_agent !== "boolean" ||
-      Object.keys(settings).some((key) => key !== "forward_agent")
-    )
-      throw new Error(
-        "Invalid host ssh-settings.json; expected a forward_agent boolean",
-      );
-    return settings.forward_agent;
-  }
-
-  async function configureForwarding() {
-    // Begin disabled so a failed check or interrupted prompt cannot retain a
-    // previous approval. This never starts an agent or changes its identities.
-    const save = (enabled) =>
-      atomicWrite(
-        sshSettingsPath,
-        JSON.stringify({ forward_agent: enabled }, null, 2) + "\n",
-      );
-    save(false);
-    let loaded = false;
-    if (env.SSH_AUTH_SOCK) {
-      try {
-        loaded =
-          execute(["ssh-add", "-l"], { quiet: true, check: false }).status ===
-          0;
-      } catch {
-        // An absent inspection tool or inaccessible agent means HTTPS fallback.
-      }
-    }
-    if (!loaded) {
-      output(
-        "No loaded host SSH agent is available. Public repositories use HTTPS; Git pushes need separate authentication.",
-      );
-      return false;
-    }
-    output(
-      "Guest processes can authenticate using identities available through your existing host SSH agent.",
-    );
-    const approved = await confirm(
-      "Forward this host SSH agent to the development VM?",
-    );
-    save(approved);
-    output(
-      approved
-        ? "Host agent forwarding approved."
-        : "Forwarding disabled. Public repositories use HTTPS; Git pushes need separate authentication.",
-    );
-    return approved;
-  }
-
-  async function refreshSSH({
-    install = false,
-    reset = false,
-    announce = true,
-  } = {}) {
+  async function refreshSSH({ install = false, announce = true } = {}) {
     const raw = incus.connection();
     const sshDir = join(home, ".ssh");
     const knownHosts = join(sshDir, "oc-development-known_hosts");
-    const config = renderSSH(raw, forwardingApproved(), knownHosts);
+    const config = renderSSH(raw, knownHosts);
     const local = join(stateDir, "ssh-config");
     atomicWrite(local, config);
-    // Read fingerprints through the local daemon before resetting SSH trust.
-    if (reset) {
-      incus.fingerprint();
-      output(
-        "Verify this VM fingerprint before clearing the old oc-dev trust record.",
-      );
-      if (
-        !(await confirm(
-          "Remove only oc-dev from its dedicated known_hosts file?",
-        ))
-      )
-        throw new Error("Host-key reset cancelled");
-      if (existsSync(knownHosts))
-        execute(["ssh-keygen", "-R", ALIAS, "-f", knownHosts]);
-    }
     if (install) {
       const fragment = join(sshDir, "oc-development.conf");
       const mainConfig = join(sshDir, "config");
@@ -246,29 +133,15 @@ export function createHost({
         if (args.length) throw new Error(`${action} takes no arguments`);
         await incus.up({ forceProvision: action === "provision" });
         return refreshSSH({ install: true });
-      case "retry-cloud-init":
-        if (args.length) throw new Error("retry-cloud-init takes no arguments");
-        await incus.up({ retryCloudInit: true });
-        return refreshSSH({ install: true });
       case "restart":
         if (args.length) throw new Error("restart takes no arguments");
         await incus.restart();
         return refreshSSH({ install: true });
-      case "repair-ssh":
-        if (args.length) throw new Error("repair-ssh takes no arguments");
-        await incus.repairSSH();
-        return refreshSSH({ install: true });
-      case "ssh-forwarding":
-        if (args.length) throw new Error("ssh-forwarding takes no arguments");
-        return configureForwarding();
       case "ssh-config": {
-        if (
-          args.some((arg) => !["--install", "--reset-host-key"].includes(arg))
-        )
+        if (args.some((arg) => arg !== "--install"))
           throw new Error("Unknown ssh-config option");
         return refreshSSH({
           install: args.includes("--install"),
-          reset: args.includes("--reset-host-key"),
         });
       }
       case "ssh":
@@ -277,7 +150,7 @@ export function createHost({
         return ssh(args, true);
       default:
         throw new Error(
-          "Usage: scripts/vm.sh setup|doctor|up|stop|restart|status|destroy|provision|retry-cloud-init|repair-ssh|ssh-forwarding|ssh-config|ssh|guest",
+          "Usage: scripts/vm.sh setup|doctor|up|stop|restart|status|destroy|provision|ssh-config|ssh|guest",
         );
     }
   }
@@ -286,8 +159,6 @@ export function createHost({
     cli,
     ssh,
     refreshSSH,
-    configureForwarding,
-    forwardingApproved,
     doctor,
   };
 }
