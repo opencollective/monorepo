@@ -1,223 +1,199 @@
-import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { test } from 'node:test';
-import { pathToFileURL } from 'node:url';
+import assert from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+import { pathToFileURL } from "node:url";
+import { workspaceFixture } from "./git-fixtures.mjs";
 
 function fixture(t) {
-  const directory = mkdtempSync(join(tmpdir(), 'oc-init-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const workspace = join(directory, 'workspace');
-  mkdirSync(join(workspace, 'scripts'), { recursive: true });
-  copyFileSync(new URL('./init.sh', import.meta.url), join(workspace, 'scripts/init.sh'));
-
-  const env = {
-    ...process.env,
-    GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'protocol.file.allow',
-    GIT_CONFIG_VALUE_0: 'always',
-    GIT_AUTHOR_NAME: 'Test',
-    GIT_AUTHOR_EMAIL: 'test@example.com',
-    GIT_COMMITTER_NAME: 'Test',
-    GIT_COMMITTER_EMAIL: 'test@example.com',
-    GIT_TERMINAL_PROMPT: '0',
-  };
-  const execute = (cwd, command, args) => spawnSync(command, args, { cwd, env, encoding: 'utf8' });
-  function git(cwd, ...args) {
-    const result = execute(cwd, 'git', args);
-    assert.equal(result.status, 0, result.stderr);
-    return result.stdout.trim();
-  }
-  function commit(cwd, content) {
-    writeFileSync(join(cwd, 'version.txt'), content);
-    git(cwd, 'add', 'version.txt');
-    git(cwd, 'commit', '-m', content);
-    return git(cwd, 'rev-parse', 'HEAD');
-  }
-
-  git(workspace, 'init', '--initial-branch=main');
+  const f = workspaceFixture(t);
   const projects = {};
-  let manifest = '';
-  for (const project of ['api', 'frontend']) {
-    const remote = join(directory, `${project}-remote`);
-    const path = `opencollective-${project}`;
-    const local = join(workspace, path);
+  let manifest = "PROJECT_REPOSITORIES=(\n";
+  for (const name of ["api", "frontend", "documentation"]) {
+    const remote = join(f.directory, `${name}-remote`);
+    const path = `opencollective-${name}`;
+    const local = join(f.workspace, path);
     mkdirSync(remote);
-    git(remote, 'init', '--initial-branch=main');
-    const initial = commit(remote, 'initial');
+    f.git(remote, "init", "--initial-branch=main");
+    const initial = f.commit(remote, "initial");
     const url = pathToFileURL(remote).href;
-    // Names intentionally differ from paths to exercise manifest parsing.
-    manifest += `[submodule "${project}"]\n\tpath = ${path}\n\turl = ${url}\n\tbranch = main\n\tignore = all\n`;
-    git(workspace, 'update-index', '--add', '--cacheinfo', '160000', initial, path);
-    projects[project] = { remote, local, path, url, initial };
+    manifest += `  "${path}" "${url}"\n`;
+    projects[name] = { remote, local, path, url, initial };
   }
-  writeFileSync(join(workspace, '.gitmodules'), manifest);
-  git(workspace, 'add', '.gitmodules', 'scripts');
-  git(workspace, 'commit', '-m', 'Workspace');
-
-  function init(args = [], status = 0) {
-    // Invoke from outside the workspace to verify root resolution.
-    const result = execute(directory, 'bash', [join(workspace, 'scripts/init.sh'), ...args]);
-    assert.equal(result.status, status, result.stdout + result.stderr);
-    return result.stdout + result.stderr;
-  }
-  return { workspace, projects, git, commit, init };
+  writeFileSync(join(f.workspace, "scripts/projects.sh"), manifest + ")\n");
+  f.git(f.workspace, "add", "scripts/projects.sh");
+  f.git(f.workspace, "commit", "-m", "Fixture manifest");
+  const init = (args = [], status = 0, overrides = {}) =>
+    f.script("init.sh", args, status, overrides);
+  return { ...f, projects, init };
 }
 
-test('initializes every submodule on the latest main, even when upstream HEAD points elsewhere', (t) => {
+test("clones all projects as independent repositories on main even when remote HEAD differs", (t) => {
   const { workspace, projects, git, commit, init } = fixture(t);
   for (const project of Object.values(projects)) {
-    project.latest = commit(project.remote, 'latest main');
-    git(project.remote, 'switch', '--create', 'legacy');
-    commit(project.remote, 'legacy');
+    project.latest = commit(project.remote, "latest main");
+    git(project.remote, "switch", "--create", "legacy");
+    commit(project.remote, "legacy");
   }
   init();
   for (const project of Object.values(projects)) {
-    assert.equal(git(project.local, 'branch', '--show-current'), 'main');
-    assert.equal(git(project.local, 'rev-parse', 'HEAD'), project.latest);
-    assert.equal(git(project.local, 'rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/main');
-    assert.equal(readFileSync(join(project.local, '.git'), 'utf8').startsWith('gitdir:'), true);
-    assert.equal(git(workspace, 'rev-parse', `HEAD:${project.path}`), project.initial);
+    assert.equal(statSync(join(project.local, ".git")).isDirectory(), true);
+    assert.equal(git(project.local, "branch", "--show-current"), "main");
+    assert.equal(git(project.local, "rev-parse", "HEAD"), project.latest);
+    assert.equal(
+      git(project.local, "rev-parse", "--abbrev-ref", "@{upstream}"),
+      "origin/main",
+    );
   }
-  assert.equal(git(workspace, 'status', '--porcelain'), '');
+  assert.equal(git(workspace, "status", "--porcelain"), "");
+  assert.equal(existsSync(join(workspace, ".git")), true);
+  assert.equal(existsSync(join(workspace, ".gitmodules")), false);
 });
 
-test('shallow initialization follows main when upstream HEAD points elsewhere', (t) => {
+test("keeps aliases, case normalization, filtering, deduplication and shallow cloning", (t) => {
   const { projects, git, commit, init } = fixture(t);
-  const latest = commit(projects.api.remote, 'latest main');
-  git(projects.api.remote, 'switch', '--create', 'legacy');
-  commit(projects.api.remote, 'legacy');
-  init(['--projects', 'api', '--shallow']);
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), latest);
-  assert.equal(git(projects.api.local, 'rev-parse', '--is-shallow-repository'), 'true');
+  const latest = commit(projects.api.remote, "new main");
+  git(projects.api.remote, "switch", "--create", "legacy");
+  commit(projects.api.remote, "legacy");
+  const output = init([
+    "--projects",
+    " API,opencollective-api,api ",
+    "--shallow",
+  ]);
+  assert.equal(
+    (output.match(/Cloning opencollective-api on main/g) || []).length,
+    1,
+  );
+  assert.equal(git(projects.api.local, "rev-parse", "HEAD"), latest);
+  assert.equal(
+    git(projects.api.local, "rev-parse", "--is-shallow-repository"),
+    "true",
+  );
+  assert.equal(existsSync(projects.frontend.local), false);
+  assert.equal(existsSync(projects.documentation.local), false);
+  const next = commit(projects.api.remote, "next main");
+  init(["--projects", "api", "--shallow"]);
+  assert.notEqual(next, latest);
+  assert.equal(git(projects.api.local, "rev-parse", "HEAD"), latest);
+  assert.equal(git(projects.api.local, "rev-parse", "origin/main"), latest);
 });
 
-test('keeps project filtering, aliases, deduplication, and shallow clones', (t) => {
-  const { workspace, projects, git, commit, init } = fixture(t);
-  const latest = commit(projects.api.remote, 'new main');
-  init(['--projects', ' API,opencollective-api,api ', '--shallow']);
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), latest);
-  assert.equal(git(projects.api.local, 'rev-parse', '--is-shallow-repository'), 'true');
-  assert.equal(existsSync(join(projects.frontend.local, '.git')), false);
-  assert.equal(git(workspace, 'status', '--porcelain'), '');
-  const next = commit(projects.api.remote, 'next main');
-  init(['--projects', 'api', '--shallow']);
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), next);
-});
-
-test('reruns fetch new commits and return clean feature branches to main', (t) => {
-  const { workspace, projects, git, commit, init } = fixture(t);
-  init();
-  git(projects.api.local, 'switch', '--create', 'feature');
-  const feature = commit(projects.api.local, 'local feature');
-  const latest = commit(projects.api.remote, 'second upstream commit');
-  init(['--projects', 'api']);
-  assert.equal(git(projects.api.local, 'branch', '--show-current'), 'main');
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), latest);
-  assert.equal(git(projects.api.local, 'rev-parse', 'feature'), feature);
-  assert.equal(git(projects.frontend.local, 'rev-parse', 'HEAD'), projects.frontend.initial);
-  assert.equal(git(workspace, 'status', '--porcelain'), '');
-  init(['--projects', 'api']);
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), latest);
-});
-
-test('updates older standalone clones, including clones that only fetched a feature branch', (t) => {
-  const { workspace, projects, git, commit, init } = fixture(t);
-  const { remote, local, url } = projects.api;
-  git(remote, 'switch', '--create', 'feature');
-  const feature = commit(remote, 'remote feature');
-  git(workspace, 'clone', '--single-branch', '--branch', 'feature', url, local);
-  git(remote, 'switch', 'main');
-  const latest = commit(remote, 'latest main');
-  init(['--projects', 'api']);
-  assert.equal(git(local, 'branch', '--show-current'), 'main');
-  assert.equal(git(local, 'rev-parse', 'HEAD'), latest);
-  assert.equal(git(local, 'rev-parse', 'feature'), feature);
-  assert.equal(git(workspace, 'config', '--get', 'submodule.api.ignore'), 'all');
-  assert.equal(git(workspace, 'status', '--porcelain'), '');
-});
-
-test('fetches but preserves uncommitted work, reports failure, and updates other projects', (t) => {
-  const { workspace, projects, git, commit, init } = fixture(t);
-  init();
-  const { local, initial, remote } = projects.api;
-  git(local, 'switch', '--create', 'feature');
-  writeFileSync(join(local, 'version.txt'), 'uncommitted work');
-  writeFileSync(join(local, 'untracked.txt'), 'untracked work');
-  const latest = commit(remote, 'upstream update');
-  const frontendLatest = commit(projects.frontend.remote, 'frontend update');
-  const output = init([], 1);
-  assert.match(output, /has uncommitted changes/);
-  assert.equal(git(local, 'branch', '--show-current'), 'feature');
-  assert.equal(git(local, 'rev-parse', 'HEAD'), initial);
-  assert.equal(git(local, 'rev-parse', 'origin/main'), latest);
-  assert.equal(readFileSync(join(local, 'version.txt'), 'utf8'), 'uncommitted work');
-  assert.equal(readFileSync(join(local, 'untracked.txt'), 'utf8'), 'untracked work');
-  assert.equal(git(projects.frontend.local, 'rev-parse', 'HEAD'), frontendLatest);
-  assert.equal(git(workspace, 'status', '--porcelain'), '');
-});
-
-for (const divergent of [false, true]) {
-  test(`preserves ${divergent ? 'divergent' : 'ahead'} local main commits`, (t) => {
-    const { projects, git, commit, init } = fixture(t);
-    init(['--projects', 'api']);
-    const local = commit(projects.api.local, 'unpublished commit');
-    if (divergent) commit(projects.api.remote, 'divergent upstream');
-    const output = init(['--projects', 'api'], 1);
-    assert.match(output, /local commits on main/);
-    assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), local);
-    assert.equal(readFileSync(join(projects.api.local, 'version.txt'), 'utf8'), 'unpublished commit');
-  });
-}
-
-test('reattaches detached checkouts to main', (t) => {
+test("leaves existing branches, local commits, stashes, dirty files and remotes untouched", (t) => {
   const { projects, git, commit, init } = fixture(t);
-  init(['--projects', 'api']);
-  git(projects.api.local, 'switch', '--detach');
-  const latest = commit(projects.api.remote, 'latest main');
-  init(['--projects', 'api']);
-  assert.equal(git(projects.api.local, 'branch', '--show-current'), 'main');
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), latest);
+  init();
+  const { local, remote, initial } = projects.api;
+  git(local, "switch", "--create", "feature");
+  const feature = commit(local, "local feature");
+  writeFileSync(join(local, "version.txt"), "stash work");
+  git(local, "stash", "push", "-m", "saved work");
+  const stash = git(local, "rev-parse", "refs/stash");
+  writeFileSync(join(local, "version.txt"), "uncommitted work");
+  writeFileSync(join(local, "untracked.txt"), "untracked work");
+  commit(remote, "upstream update");
+  // A failed fetch would be visible if setup attempted one.
+  git(local, "remote", "set-url", "origin", "/nonexistent/oc-init-remote");
+  const before = git(local, "status", "--porcelain");
+  init();
+  assert.equal(git(local, "branch", "--show-current"), "feature");
+  assert.equal(git(local, "rev-parse", "HEAD"), feature);
+  assert.equal(git(local, "rev-parse", "origin/main"), initial);
+  assert.equal(git(local, "rev-parse", "refs/stash"), stash);
+  assert.equal(git(local, "status", "--porcelain"), before);
+  assert.equal(
+    readFileSync(join(local, "version.txt"), "utf8"),
+    "uncommitted work",
+  );
+  assert.equal(
+    git(local, "remote", "get-url", "origin"),
+    "/nonexistent/oc-init-remote",
+  );
 });
 
-test('initializes empty placeholder directories but preserves non-repository contents', (t) => {
-  const { projects, git, init } = fixture(t);
-  mkdirSync(projects.api.local);
-  mkdirSync(projects.frontend.local);
-  writeFileSync(join(projects.frontend.local, 'keep.txt'), 'local data');
-  init([], 1);
-  assert.equal(git(projects.api.local, 'branch', '--show-current'), 'main');
-  assert.equal(readFileSync(join(projects.frontend.local, 'keep.txt'), 'utf8'), 'local data');
-  assert.equal(existsSync(join(projects.frontend.local, '.git')), false);
-});
-
-test('rejects invalid selections before cloning', (t) => {
+test("leaves empty folders, non-repository contents and linked metadata untouched", (t) => {
   const { projects, init } = fixture(t);
-  assert.match(init(['--projects', 'api,unknown'], 1), /Unknown project/);
-  assert.match(init(['--projects', ' , '], 1), /No projects selected/);
-  assert.match(init(['--projects'], 1), /requires a comma-separated list/);
-  assert.equal(existsSync(join(projects.api.local, '.git')), false);
+  for (const project of Object.values(projects)) mkdirSync(project.local);
+  writeFileSync(join(projects.frontend.local, "keep.txt"), "local data");
+  const pointer = "gitdir: ../.git/modules/old-submodule\n";
+  writeFileSync(join(projects.documentation.local, ".git"), pointer);
+  init();
+  assert.equal(existsSync(join(projects.api.local, ".git")), false);
+  assert.equal(
+    readFileSync(join(projects.frontend.local, "keep.txt"), "utf8"),
+    "local data",
+  );
+  assert.equal(
+    readFileSync(join(projects.documentation.local, ".git"), "utf8"),
+    pointer,
+  );
 });
 
-test('reports fetch failures and continues with other repositories', (t) => {
-  const { projects, git, commit, init } = fixture(t);
-  init();
-  const latest = commit(projects.frontend.remote, 'new frontend');
-  git(projects.api.local, 'remote', 'set-url', 'origin', '/nonexistent/oc-init-remote');
-  assert.match(init([], 1), /Failed to initialize\/update opencollective-api/);
-  assert.equal(git(projects.frontend.local, 'rev-parse', 'HEAD'), latest);
+test("rejects invalid selections and arguments before cloning", (t) => {
+  const { projects, init } = fixture(t);
+  assert.match(init(["--projects", "api,unknown"], 1), /Unknown project/);
+  assert.match(init(["--projects", " , "], 1), /No projects selected/);
+  assert.match(init(["--projects"], 1), /requires a comma-separated list/);
+  assert.match(init(["--unknown"], 1), /Unknown option/);
+  assert.match(init(["--help"]), /Existing directories are left untouched/);
+  for (const project of Object.values(projects))
+    assert.equal(existsSync(project.local), false);
 });
 
-test('reports a missing upstream main instead of following another branch', (t) => {
-  const { projects, git, commit, init } = fixture(t);
-  init();
-  git(projects.api.remote, 'branch', '--move', 'main', 'legacy');
-  const latest = commit(projects.frontend.remote, 'new frontend');
+test("reports clone failures and continues with other projects", (t) => {
+  const { workspace, projects, init } = fixture(t);
+  const manifest = readFileSync(join(workspace, "scripts/projects.sh"), "utf8");
+  writeFileSync(
+    join(workspace, "scripts/projects.sh"),
+    manifest.replace(projects.api.url, "file:///nonexistent/oc-init-remote"),
+  );
+  assert.match(init([], 1), /Failed to clone: opencollective-api/);
+  assert.equal(existsSync(join(projects.api.local, ".git")), false);
+  assert.equal(
+    statSync(join(projects.frontend.local, ".git")).isDirectory(),
+    true,
+  );
+});
+
+test("reports a missing main rather than cloning another branch", (t) => {
+  const { projects, git, init } = fixture(t);
+  git(projects.api.remote, "branch", "--move", "main", "legacy");
   init([], 1);
-  assert.equal(git(projects.api.local, 'rev-parse', 'HEAD'), projects.api.initial);
-  assert.equal(git(projects.frontend.local, 'rev-parse', 'HEAD'), latest);
+  assert.equal(existsSync(join(projects.api.local, ".git")), false);
+  assert.equal(existsSync(join(projects.frontend.local, ".git")), true);
+});
+
+test("preserves file conflicts and still clones other projects", (t) => {
+  const { projects, init } = fixture(t);
+  writeFileSync(projects.api.local, "local file");
+  init([], 1);
+  assert.equal(readFileSync(projects.api.local, "utf8"), "local file");
+  assert.equal(existsSync(join(projects.frontend.local, ".git")), true);
+});
+
+test("clones projects while workspace Git is hidden and leaves it hidden", (t) => {
+  const { workspace, projects, script, init, git } = fixture(t);
+  script("remove-git.sh");
+  init(["--projects", "api"]);
+  assert.equal(existsSync(join(workspace, ".git")), false);
+  assert.equal(existsSync(join(workspace, ".git-backup/git")), true);
+  assert.equal(git(projects.api.local, "branch", "--show-current"), "main");
+  script("restore-git.sh");
+  assert.equal(git(workspace, "status", "--porcelain"), "");
+});
+
+test("honors an explicit root without requiring workspace Git", (t) => {
+  const { directory, projects, init, git } = fixture(t);
+  const target = join(directory, "another workspace");
+  mkdirSync(target);
+  init(["--projects", "api"], 0, { OC_MONOREPO_ROOT: target });
+  assert.equal(existsSync(projects.api.local), false);
+  assert.equal(
+    git(join(target, projects.api.path), "branch", "--show-current"),
+    "main",
+  );
 });

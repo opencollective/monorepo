@@ -120,10 +120,11 @@ test("dependency launcher rejects path traversal and unsupported engines", (t) =
   }
 });
 
-test("shell shortcuts find the workspace from a service and nested worktree", (t) => {
+test("shell shortcuts find a workspace with hidden Git from a service and nested worktree", (t) => {
   const directory = fixture(t);
   mkdirSync(path.join(directory, "scripts"));
-  writeFileSync(path.join(directory, ".gitmodules"), "");
+  writeFileSync(path.join(directory, "scripts/init.sh"), "");
+  mkdirSync(path.join(directory, ".git-backup/git"), { recursive: true });
   writeFileSync(path.join(directory, "scripts/run.sh"), "#!/bin/sh\npwd\n", {
     mode: 0o755,
   });
