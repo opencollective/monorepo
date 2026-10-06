@@ -1,0 +1,26 @@
+scripts:
+  setup: |
+    #!/usr/bin/env bash
+    set -euxo pipefail
+
+    echo "=== ORCA SETUP START ==="
+    echo "PWD=$PWD"
+    echo "ORCA_ROOT_PATH=${ORCA_ROOT_PATH:-<unset>}"
+    echo "ORCA_WORKTREE_PATH=${ORCA_WORKTREE_PATH:-<unset>}"
+    echo "PATH=$PATH"
+
+    echo "orca.yaml setup works! you can remove custom dev config" > IMPORTANT.txt
+
+    ./scripts/worktree/setup.sh
+
+  archive: |
+    #!/usr/bin/env bash
+    set -euxo pipefail
+
+    echo "=== ORCA ARCHIVE START ==="
+    echo "PWD=$PWD"
+    echo "ORCA_ROOT_PATH=${ORCA_ROOT_PATH:-<unset>}"
+    echo "ORCA_WORKTREE_PATH=${ORCA_WORKTREE_PATH:-<unset>}"
+    echo "PATH=$PATH"
+    # We have to force delete because of submodules
+    git -C "$ORCA_ROOT_PATH" worktree remove --force "$ORCA_WORKTREE_PATH"
