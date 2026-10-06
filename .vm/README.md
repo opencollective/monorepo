@@ -90,6 +90,9 @@ project location, and use **Run on → oc-dev**. Add each service as its own pro
 when working with service repositories.
 
 In VS Code, install **Remote - SSH**, connect to `oc-dev`, and open `/workspace`.
+Workspace Git can be hidden manually with `./scripts/remove-git.sh` and restored
+with `./scripts/restore-git.sh`; the guest health check supports either state.
+
 Create service worktrees inside the VM under
 `/workspace/.worktrees/<feature>/<repository>`, following the service's `AGENTS.md`.
 
@@ -148,8 +151,8 @@ stage and include cloud-init diagnostics when applicable.
 ## Validation
 
 ```bash
-node --test scripts/init.test.mjs scripts/vm.test.mjs .vm/*.test.mjs
-shellcheck -S warning .vm/*.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
+node --test scripts/*.test.mjs .vm/*.test.mjs
+shellcheck -S warning -x .vm/*.sh scripts/init.sh scripts/projects.sh scripts/remove-git.sh scripts/restore-git.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
 ```
 
 Live checks require the KVM host: run setup, verify shared writes and ownership,

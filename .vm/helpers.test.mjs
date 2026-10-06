@@ -284,3 +284,36 @@ test("missing service stops stack setup before commands or workspace writes", as
   );
   assert.equal(existsSync(join(root, "opencollective-api")), false);
 });
+
+for (const state of ["active", "hidden", "absent"]) {
+  test(`guest doctor supports ${state} workspace Git while checking the toolchain`, (t) => {
+    const root = fixture(t);
+    if (state === "active") mkdirSync(join(root, ".git"));
+    if (state === "hidden")
+      mkdirSync(join(root, ".git-backup/git"), { recursive: true });
+    const calls = [];
+    const messages = [];
+    createGuest({
+      root,
+      output: (message) => messages.push(message),
+      run: (args) => {
+        calls.push(args);
+        return { status: 0 };
+      },
+    }).doctor();
+    assert.equal(
+      calls.some((args) => args.join(" ") === "git status --short"),
+      state === "active",
+    );
+    assert.equal(
+      messages.some((message) => message.includes("Workspace Git is hidden")),
+      state === "hidden",
+    );
+    assert.ok(calls.some((args) => args.join(" ") === "git --version"));
+    assert.ok(
+      calls.some(
+        (args) => args.join(" ") === "docker info --format {{.ServerVersion}}",
+      ),
+    );
+  });
+}

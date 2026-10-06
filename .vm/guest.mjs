@@ -233,7 +233,13 @@ export function createGuest({
     execute(["docker", "compose", "version"]);
     execute(["docker", "info", "--format", "{{.ServerVersion}}"]);
     execute(["findmnt", "-n", "-o", "SOURCE,FSTYPE,SIZE", "/"]);
-    execute(["git", "status", "--short"]);
+    if (existsSync(join(root, ".git"))) {
+      execute(["git", "status", "--short"]);
+    } else if (existsSync(join(root, ".git-backup/git"))) {
+      output(
+        "Workspace Git is hidden. Restore it with scripts/restore-git.sh when needed.",
+      );
+    }
     output(
       "Guest toolchain ready. Model/GitHub logins and running applications are checked separately.",
     );

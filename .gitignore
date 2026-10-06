@@ -5,6 +5,7 @@ package-lock.json
 opencode.json
 .opencode
 .worktrees
+/.git-backup/
 
 # Personal VM resource overrides stay local; Incus login/approval state lives outside this checkout.
 .vm/.vm.local.json

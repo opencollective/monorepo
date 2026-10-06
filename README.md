@@ -40,7 +40,7 @@ cd opencollective
 ./scripts/init.sh
 ```
 
-This initializes all Open Collective projects as Git submodules and checks out the latest `origin/main` on a local `main` branch. Every subsequent run fetches and updates the projects again.
+This clones missing Open Collective projects as independent Git repositories on their `main` branch. Existing directories are left untouched, including empty directories. Rerunning setup does not fetch updates or switch branches.
 
 To clone only the projects you need (faster setup, less disk use):
 
@@ -48,19 +48,35 @@ To clone only the projects you need (faster setup, less disk use):
 ./scripts/init.sh --projects api,frontend,documentation
 ```
 
-Use short names (`api`, `frontend`, `documentation`, …) or full directory names (`opencollective-api`). Only selected projects are cloned or updated. Combine with `--shallow` for smaller initial clones. Run `./scripts/init.sh --help` for all options.
+Use short names (`api`, `frontend`, `documentation`, …) or full directory names (`opencollective-api`). Only missing selected projects are cloned. Combine with `--shallow` for smaller initial clones. Run `./scripts/init.sh --help` for all options.
 
 The devcontainer below requires the API and frontend repositories, including the API's Docker Compose files.
 
 ### Working with the project repositories
 
-Commit and push service changes from the service's own directory. Submodules use `ignore = all`, so edits, commits, and branch switches inside them do not appear as changes in the workspace repository. Explicitly staged submodule commit pointers still appear and can be committed.
+Commit and push service changes from the service's own directory. Each project is an independent repository, and project directories are ignored by the workspace repository. Update projects yourself when needed.
 
-Rerunning `init.sh` switches selected projects back to `main` and fast-forwards them to the latest `origin/main`. Feature branches remain available. If a project has uncommitted changes or commits on `main` that are not on `origin/main`, the script preserves that work, reports an error, and continues updating the other projects. It exits with a nonzero status if any project fails. Commit or stash uncommitted changes, or reconcile local `main` commits, before retrying.
+Setup never migrates, updates, or deletes existing repositories. An existing checkout with submodules may still have services whose Git metadata depends on the workspace's `.git`; prepare independent clones separately if you want to hide workspace Git. The hide command reports these dependencies and refuses to move metadata that they need.
 
-Existing repositories cloned by older versions of the setup script are adopted as submodules automatically. The script does not stage updated submodule commit pointers in the workspace.
+### Hiding and restoring workspace Git
 
-Git records a commit pointer for each submodule, but the setup script intentionally follows the latest `main` rather than those recorded commits. Plain `git submodule update --init` uses the recorded commits and usually leaves a detached HEAD; use `./scripts/init.sh` for this development workflow.
+To let tools treat the workspace as a regular folder, hide its Git metadata manually:
+
+```bash
+./scripts/remove-git.sh
+```
+
+This moves only the root `.git` directory to `.git-backup/git`. Service Git, `.gitignore`, `.gitattributes`, and `.github` stay in place. Setup and shell shortcuts work while workspace Git is hidden. Setup never hides or restores it automatically.
+
+To contribute to the workspace itself:
+
+```bash
+./scripts/restore-git.sh
+# Make workspace changes, then commit and push them from the workspace root.
+./scripts/remove-git.sh
+```
+
+These commands preserve Git state and refuse to overwrite conflicting metadata. Ordinary clones are supported; workspace Git worktrees are not. Active workspace worktrees and services linked to root Git must be handled before hiding. Independent service worktrees remain available under `.worktrees/<feature>/<repository>`; create them from their service repository as described in `AGENTS.md`.
 
 ### 2. Open in VS Code with DevContainer (Recommended)
 

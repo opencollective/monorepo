@@ -9,7 +9,7 @@ _oc_monorepo_root() {
   fi
   local directory="$PWD"
   while [[ "$directory" != / ]]; do
-    if [[ -f "$directory/.gitmodules" && -f "$directory/scripts/run.sh" ]]; then
+    if [[ -f "$directory/scripts/init.sh" && -f "$directory/scripts/run.sh" ]]; then
       printf '%s\n' "$directory"
       return
     fi

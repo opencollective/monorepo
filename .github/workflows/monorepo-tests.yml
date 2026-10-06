@@ -32,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Run monorepo and VM tests
-        run: node --test scripts/init.test.mjs scripts/vm.test.mjs .vm/*.test.mjs
+        run: node --test scripts/*.test.mjs .vm/*.test.mjs
 
   # Shell validation complements Node behavior tests. Live provisioning and
   # editor acceptance remain manual checks on a Linux host with KVM/Incus.
@@ -50,4 +50,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Check shell scripts
-        run: shellcheck -S warning .vm/*.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
+        run: shellcheck -S warning -x .vm/*.sh scripts/init.sh scripts/projects.sh scripts/remove-git.sh scripts/restore-git.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
