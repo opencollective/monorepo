@@ -1,0 +1,50 @@
+[submodule "opencollective"]
+	path = opencollective
+	url = git@github.com:opencollective/opencollective.git
+	branch = main
+	ignore = all
+[submodule "opencollective-api"]
+	path = opencollective-api
+	url = git@github.com:opencollective/opencollective-api.git
+	branch = main
+	ignore = all
+[submodule "opencollective-documentation"]
+	path = opencollective-documentation
+	url = git@github.com:opencollective/documentation.git
+	branch = main
+	ignore = all
+[submodule "opencollective-frontend"]
+	path = opencollective-frontend
+	url = git@github.com:opencollective/opencollective-frontend.git
+	branch = main
+	ignore = all
+[submodule "opencollective-images"]
+	path = opencollective-images
+	url = git@github.com:opencollective/opencollective-images.git
+	branch = main
+	ignore = all
+[submodule "opencollective-pdf"]
+	path = opencollective-pdf
+	url = git@github.com:opencollective/opencollective-pdf.git
+	branch = main
+	ignore = all
+[submodule "opencollective-rest"]
+	path = opencollective-rest
+	url = git@github.com:opencollective/opencollective-rest.git
+	branch = main
+	ignore = all
+[submodule "opencollective-taxes"]
+	path = opencollective-taxes
+	url = git@github.com:opencollective/opencollective-taxes.git
+	branch = main
+	ignore = all
+[submodule "opencollective-rss"]
+	path = opencollective-rss
+	url = git@github.com:opencollective/opencollective-rss
+	branch = main
+	ignore = all
+[submodule "opencollective-security"]
+	path = opencollective-security
+	url = git@github.com:opencollective/opencollective-security.git
+	branch = main
+	ignore = all

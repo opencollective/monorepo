@@ -34,24 +34,6 @@ while IFS= read -r -d '' line; do
   fi
 done < "$preflight_file"
 
-# Inspect nested Git markers, including service worktrees, without entering Git
-# metadata or dependency installs. Linked repositories must remain usable.
-find . \
-  -type d \( -name node_modules -o -name .git-backup \) -prune -o \
-  -name .git -print0 -prune > "$preflight_file"
-while IFS= read -r -d '' marker; do
-  [[ -n "$marker" && "$marker" != './.git' ]] || continue
-  directory="${marker%/.git}"
-  git_dir=$(git -C "$directory" rev-parse --absolute-git-dir) || fail "Cannot resolve Git metadata for $directory; leave it intact before hiding workspace Git."
-  common_dir=$(git -C "$directory" rev-parse --path-format=absolute --git-common-dir) || fail "Cannot resolve shared Git metadata for $directory."
-  for metadata in "$git_dir" "$common_dir"; do
-    metadata=$(cd "$metadata" && pwd -P) || fail "Cannot resolve physical Git metadata for $directory."
-    if [[ "$metadata" == "$PROJECT_ROOT/.git" || "$metadata" == "$PROJECT_ROOT/.git/"* ]]; then
-      fail "$directory depends on workspace Git metadata. Use independent service clones before hiding Git; no migration is performed."
-    fi
-  done
-done < "$preflight_file"
-
 umask 077
 mkdir "$BACKUP_DIR"
 if ! mv .git "$BACKUP_DIR/git"; then

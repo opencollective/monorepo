@@ -5,6 +5,7 @@ package-lock.json
 opencode.json
 .opencode
 .worktrees
+/.git-backup/
 
 # Personal VM resource overrides stay local; Incus login/approval state lives outside this checkout.
 .vm/.vm.local.json
@@ -19,16 +20,3 @@ skills-lock.json
 !.agents/skills/search-i18n-translations
 !.agents/skills/security*
 !.agents/skills/support-ticket-reply
-
-# Projects are independent repositories, not workspace contents.
-/opencollective/
-/opencollective-api/
-/opencollective-documentation/
-/opencollective-frontend/
-/opencollective-images/
-/opencollective-pdf/
-/opencollective-rest/
-/opencollective-taxes/
-/opencollective-rss/
-/opencollective-security/
-/.git-backup/
