@@ -1,5 +1,7 @@
 # Open Collective
 
+If `docs/agents/developer-specific-instructions.md` exists, read and follow it. If it does not exist, proceed silently.
+
 Transparent fundraising platform. Each subfolder is its own git repo - run git commands there. Per-service conventions live in `<repo>/AGENTS.md`; read that file before changing the service.
 
 **Docs:** https://documentation.opencollective.com
