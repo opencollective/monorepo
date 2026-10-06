@@ -69,7 +69,8 @@ done
 
 # Get workspace root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+# An explicit root can select another checkout.
+WORKSPACE_ROOT="${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 cd "$WORKSPACE_ROOT"
 
 # Determine which projects to install

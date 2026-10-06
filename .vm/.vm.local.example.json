@@ -1,0 +1,11 @@
+{
+  "cpus": 8,
+  "memory_mb": 43008,
+  "disk_gb": 100,
+  "image": "images:ubuntu/24.04/cloud",
+  "project": "oc-development",
+  "instance_name": "oc-dev",
+  "storage_pool": "oc-development",
+  "network_address": "192.168.121.0/24",
+  "git_protocol": "https"
+}

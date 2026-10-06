@@ -1,0 +1,12 @@
+{
+  "node": "24.21.0",
+  "nvm": "latest",
+  "npm_packages": {
+    "@openai/codex": "latest",
+    "opencode-ai": "latest",
+    "eslint": "latest",
+    "prettier": "latest",
+    "typescript": "latest",
+    "pm2": "latest"
+  }
+}

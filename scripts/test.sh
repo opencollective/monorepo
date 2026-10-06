@@ -97,7 +97,7 @@ done
 
 # Get workspace root (parent of scripts directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+WORKSPACE_ROOT="${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 PROJECT_DIR="$WORKSPACE_ROOT/$PROJECT"
 
 # Check that the project directory exists

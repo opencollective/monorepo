@@ -3,6 +3,9 @@
 # Run services in development mode using PM2
 # Supports: ./scripts/run.sh [frontend] [api] [pdf] [service:env]
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}" || exit 1
+
 # Function to show help menu
 show_help() {
     echo "Usage: $0 [-b|--background] [-h|--help] [service[:env]]..."
@@ -166,4 +169,3 @@ if [ "$BACKGROUND" = false ]; then
 else
     echo "Services are running in background. Use 'npx pm2 monit' to start the monitoring interface."
 fi
-

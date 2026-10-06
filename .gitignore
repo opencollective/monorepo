@@ -6,6 +6,9 @@ opencode.json
 .opencode
 .worktrees
 
+# Personal VM resource overrides stay local; Incus login/approval state lives outside this checkout.
+.vm/.vm.local.json
+
 # Skills are specific to each developer
 .agents/skills
 skills-lock.json

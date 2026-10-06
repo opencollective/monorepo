@@ -20,6 +20,12 @@ To take full advantage of these benefits, it is recommended that you go through 
 
 ## Getting Started
 
+For a persistent KVM development machine (accessed through Orca and VS Code Remote
+SSH, for example), follow [the development VM guide](.vm/README.md). It installs the
+toolchain and Docker inside the VM.
+Start its interactive setup with `./scripts/vm.sh setup` after installing the host
+prerequisites. The DevContainer workflow below remains available.
+
 ### Prerequisites
 
 - Git
@@ -29,7 +35,7 @@ To take full advantage of these benefits, it is recommended that you go through 
 ### 1. Clone the Workspace
 
 ```bash
-git clone https://github.com/opencollective/opencollective-monorepo.git opencollective
+git clone https://github.com/opencollective/monorepo.git opencollective
 cd opencollective
 ./scripts/init.sh
 ```
@@ -121,6 +127,6 @@ In the devcontainer, `run` and `test` aliases are set up automatically. Outside 
 
 If you prefer not to use DevContainers:
 
-1. Start dependencies: `./scripts/start-dependencies.sh`
+1. Start dependencies: `./scripts/start-dependencies.sh --detach db mail uploads`
 2. Navigate to individual project directories (`opencollective-api`, `opencollective-frontend`)
 3. Follow the setup instructions in their README files
