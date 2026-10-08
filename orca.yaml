@@ -22,4 +22,6 @@ scripts:
     echo "PATH=$PATH"
 
     # We have to force delete because of submodules
-    git -C "$ORCA_ROOT_PATH" worktree remove --force "$ORCA_WORKTREE_PATH"
+    if [[ -d "$ORCA_WORKTREE_PATH" ]]; then
+      git -C "$ORCA_ROOT_PATH" worktree remove --force "$ORCA_WORKTREE_PATH"
+    fi

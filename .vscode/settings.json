@@ -31,7 +31,8 @@
     "logs/": true,
     "**/tsconfig.tsbuildinfo": true,
     "opencollective/.github/aw/logs/": true,
-    "**/.nyc_output/": true
+    "**/.nyc_output/": true,
+    ".worktrees": true
   },
   "eslint.runtime": "node"
 }
