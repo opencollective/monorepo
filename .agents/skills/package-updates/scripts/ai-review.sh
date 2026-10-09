@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # AI review before the user's review: collect the findings of the bot reviewers on a PR (Codex, CodeRabbit),
 # or run Codex locally on an unpushed worktree, so every finding is integrated or dismissed before the batch.
-# usage: ai-review.sh <api|frontend|rest|images|pdf> <pr-number>            # findings on the PR (threads + bot review bodies)
-#        ai-review.sh <api|frontend|rest|images|pdf> --worktree <path> [title]   # `codex review --base origin/main` in that worktree
-#        ai-review.sh <api|frontend|rest|images|pdf> --resolve <thread-id> ...   # mark integrated threads resolved (no comment is posted)
+# usage: ai-review.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number>            # findings on the PR (threads + bot review bodies)
+#        ai-review.sh <api|frontend|rest|images|pdf|contributors-svg> --worktree <path> [title]   # `codex review --base origin/main` in that worktree
+#        ai-review.sh <api|frontend|rest|images|pdf|contributors-svg> --resolve <thread-id> ...   # mark integrated threads resolved (no comment is posted)
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 review_json=$(mktemp "${TMPDIR:-/tmp}/package-review.XXXXXX")
 trap 'rm -f "$review_json"' EXIT

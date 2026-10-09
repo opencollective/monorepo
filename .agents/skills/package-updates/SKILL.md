@@ -1,14 +1,16 @@
 ---
 name: package-updates
-description: Review and maintain dependency-update PRs (Renovate, Dependabot, and lockfile maintenance) in Open Collective api, frontend, rest, images, and pdf. Use for inventory, CI triage, retries, rebases, compatibility fixes, and authorized merges. Status and review requests remain read-only.
+description: Review and maintain dependency-update PRs (Renovate, Dependabot, and lockfile maintenance) in Open Collective api, frontend, rest, images, pdf, and contributors-svg. Use for inventory, CI triage, retries, rebases, compatibility fixes, and authorized merges. Status and review requests remain read-only.
 ---
 
 # Package updates
 
 Maintain dependency PRs through investigation, verification, and the actions the user authorized.
-Scope is api, frontend, rest, images and pdf unless the user names a repo or PR. A review-only request produces findings;
+Scope is api, frontend, rest, images, pdf and contributors-svg unless the user names a repo or PR. A review-only request produces findings;
 it does not authorize retries, edits to PRs, pushes, or merges. Reviewing this skill's own files does
-not start maintenance on live PRs.
+not start maintenance on live PRs. Other repositories follow the same rules, but the scripts only know
+these six: do their steps by hand (`gh pr review --approve`, then `gh pr merge --squash
+--match-head-commit <sha>` on the checked head).
 
 Read [references/repo-facts.md](references/repo-facts.md) once per maintenance session. Its dated
 observations are starting points: verify relevant workflow, engine, and branch-protection settings
@@ -34,6 +36,10 @@ before relying on them. Read [references/failures.md](references/failures.md) fo
   Authorization given earlier in the session persists.
 - The user's shell may be zsh: an unquoted `$var` does not word-split (loop with `bash -c`), and
   `$H:refs/...` applies the `:r` modifier. Brace every variable next to a colon: `"${H}:refs/heads/<branch>"`.
+  A line starting with `=` (`echo ======` as a separator) fails with "= not found": use `echo ----`.
+- In scratch worktrees, install with `npm ci --ignore-scripts`: a `prepare` script (husky 9) writes
+  `core.hooksPath` into the git config the worktree shares with the user's checkout, which silently
+  disables their hooks there. If it happened, `git config --unset core.hooksPath` in that repo.
 - Re-read live PR state right before asking or acting: the user often approves, merges or comments
   from GitHub while a question is open. A batch item already done there is reported, never re-run.
 
@@ -116,8 +122,15 @@ bash "$SK/scripts/failures.sh" api 12194
   user merges it themselves from GitHub. Other majors (lint tooling, build tooling, small libraries)
   are ordinary candidates once their compat fix is reviewed.
 - Security bumps (`[security]` in the title, Dependabot alerts) come first in the batch and are
-  never closed for convenience. An `abandoned` title is a caution flag (stale, re-check the
-  release notes), not a skip.
+  never closed for convenience. An `- abandoned` title suffix is Renovate's, not the package's: Renovate
+  no longer updates that PR (it carries foreign commits, or a newer major replaced the target), so the
+  branch goes stale. A caution flag (rebase locally, re-check the release notes), not a skip.
+- Dependabot security PRs go stale fast: lockfile maintenance and other bumps often install the
+  target version on main first. Compare each PR's target with main's lockfile (`jq` over
+  `.packages`, nested copies included); already satisfied means close as outdated (pdf, 11 PRs on
+  2026-10-02). An alert with no PR, or none that fixes it, is traced the same way to the package that
+  pins the vulnerable copy: when we own that package, open an issue there (Hyperwatch → `ip-cidr` →
+  `ip-address` 9, hyperwatch/hyperwatch#638, all five repos).
 - **Blocked:** `renovate/artifacts` red (lockfile regeneration failed in Renovate's sandbox, nothing
   to rerun: fix the cause on main, usually `engines.npm` drift, then tick the checkbox), an upstream
   fix is needed, main itself fails the same test, another PR must merge first, or an ecosystem gate
@@ -145,6 +158,11 @@ bash "$SK/scripts/local-rebase.sh" api 11945    # prepares locally; does not pus
 ```
 
 Track attempted retries in session notes; `rerun.sh` does not enforce the one-retry budget itself.
+A retry that never ran the tests (infra failure, expired artifact) does not use the budget. A retry
+that fails on a different spec unrelated to the bump, after reading its release notes, justifies one
+more full rerun: say so in the report. Jobs that download an artifact from an earlier job of the same
+run (frontend and api e2e: `frontend-next`) fail with "Artifact not found" when retried with `--failed`
+after the artifact expired: rerun the whole workflow (`gh run rerun <id>` without `--failed`).
 Read/download logs first. If the fix is in another repo consumed by `prepare`, rerun the whole
 workflow, not just failed jobs. Cancel first only if that run is still active, then await completion
 before `gh run rerun <id> -R "$REPO"`.
@@ -230,9 +248,30 @@ has started before polling PR checks; old completed checks can remain briefly vi
 Any repeat failure goes back to investigation. A timeout is a pending state, not success.
 Typical historical durations are 20–26 minutes for API tests and 3–25 minutes per e2e shard.
 
-## 4b. AI review first, then the user
+## 4b. Own review, second-agent review, then the user
 
-Before an item reaches the batch, it gets an AI review and every finding is integrated or dismissed:
+Before an item reaches the batch, it gets two reviews, in this order.
+
+**1. Your own review**, as the agent running the process, for every item, dependency-only bumps
+included. Green CI is not a review: it proves only what the tests exercise.
+
+- Read the release notes for every version in the range, each intermediate major included, and list
+  the breaking changes (removed or renamed APIs, changed defaults, ESM-only packages, `engines`,
+  peer ranges).
+- Check each one against our usage: grep the call sites, config files and scripts that touch the
+  package, and the peers that must accept the new version. A breaking change with no call site is
+  noted as not applicable, with the grep that shows it.
+- Check what CI actually exercises on those call sites. When nothing does (stubbed in tests, behind a
+  disabled flag, production-only install), compare old and new versions directly (a small probe, a
+  differential run), or add a test that fails on the broken behaviour and passes on the fix.
+- For lockfile changes, list the transitive packages that moved and check the ones in the runtime path.
+- For a fix commit, review its diff like any code change: correctness, scope, and the tests it adds.
+- Frontend: when a package listed in `allowScripts` moves, lockfile-only bumps included, its
+  `name@version` entry must move too (`fixing.md` §3). Missed on Cypress 16 (frontend #12485, fixed
+  by #12520): npm 11 ignores the list, so nothing fails until npm 12.
+
+**2. A second agent's review** when one is available, so the same reasoning is not the only check.
+Every finding is integrated or dismissed:
 
 ```sh
 bash "$SK/scripts/ai-review.sh" api 12197                 # Codex + CodeRabbit findings on the PR head (threads and review bodies)
@@ -244,9 +283,11 @@ bash "$SK/scripts/ai-review.sh" api --resolve <thread-id>  # after a fix is comm
   when someone comments `@codex review` (the user posts it, not the agent); read its threads with `ai-review.sh`. Otherwise PRs get the local `codex review` in a worktree of the PR head. Unpushed fixes always get the local review.
 - Each finding is either **integrated** (commit on the branch, rerun the checks, resolve the thread) or
   **dismissed** with a one-line reason. Nothing is left unanswered, nothing is posted as a comment.
-- The batch line carries the outcome: `AI review: 2 findings, 1 fixed (date bounds), 1 dismissed (nit,
-constants already used)`. An item with an unaddressed finding is not a merge candidate yet.
-- Dependency-only bumps with no code change and no bot finding say `AI review: none` and move on.
+- The batch line carries both outcomes: `Own review: breaking changes N/A (no cy.exec, 2 Cypress.env calls migrated);
+AI review: 2 findings, 1 fixed (date bounds), 1 dismissed (nit, constants already used)`. An item with an
+unaddressed finding, or without its own review, is not a merge candidate yet.
+- Dependency-only bumps with no code change and no bot finding still carry their own review line,
+  then `AI review: none`. When no second agent is available, say so (`AI review: unavailable`).
 - After integrating findings, review the new head. Limit automated review/fix cycles to two per
   item per session; report remaining substantive findings and hold the merge. No findings does
   not prove a review ran: verify the reviewed SHA and report missing or incomplete coverage.
@@ -272,7 +313,7 @@ already authorized without asking again. For status and review-only requests, re
 and recommended next steps without an approval question.
 
 ```
-Merge (green, fresh, AI-reviewed; your yes = approval from your account, then merged)
+Merge (green, fresh, reviewed by you-the-agent and a second agent; your yes = approval from your account, then merged)
   M1  api #12197  @hyperwatch/hyperwatch 4.3.1→5      all checks green, release notes: no breaking change for our 4 call sites; AI review: 1 finding, dismissed (fallback style nit)
   M2  frontend #12431  framer-motion→motion            green after rebase, your import-migration commits on the branch
 Push fix (then back to you for a final review once green)
@@ -319,7 +360,13 @@ worktree. Re-read the live head before pushing; if it changed, inspect and recon
 instead of replacing the lease with the newer SHA. Expand
 short SHAs with `git rev-parse <short>`, never type or compose a full one. Push a SHA you printed and checked, never a
 relative ref like `HEAD~1` at the end of a multi-step chain: one failed step earlier (a bad flag,
-a conflict) silently changes what `HEAD~1` points at. Verify with `git ls-remote` after the push. Clean up only worktrees created by this task
+a conflict) silently changes what `HEAD~1` points at. Verify with `git ls-remote` after the push.
+On a Renovate branch, check again once CI has started: a Renovate run already in progress can
+force-push over the new commit a minute later (contributors-svg #119, 2026-10-05). If the head lost
+the commit, re-apply it on Renovate's new head and push again; Renovate then sees the branch as modified.
+Renovate can also push a new head with an identical tree right after a rebase request (pdf #1296,
+2026-10-02): when the live head moved, `git diff <tested-head> <new-head>` empty means move the commit
+onto the new head (`git rebase --onto <new-head> HEAD~1`, then lease on the new head). Clean up only worktrees created by this task
 whose work is safely pushed or deliberately discarded; retain unpushed fixes and report paths.
 
 Report actions and verified current state using full PR links, then pending work and items left

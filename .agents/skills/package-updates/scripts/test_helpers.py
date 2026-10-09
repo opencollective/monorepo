@@ -56,6 +56,8 @@ if args[:2] == ['pr', 'view']:
     value = values[min(index, len(values)-1)]
     counts[key] = index + 1
     counter.write_text(json.dumps(counts))
+    if value == 'network-error':
+        print('read: operation timed out', file=sys.stderr); sys.exit(1)
 elif args[:2] == ['api', 'graphql']: value = f['graphql']
 elif args[:2] == ['pr', 'list']: value = [f['pr']]
 elif args[:2] == ['run', 'list']: value = f.get('runs', [])
@@ -93,9 +95,12 @@ sys.exit(r.returncode)
             for name in (short, slug, 'opencollective/' + slug):
                 result = run(['bash', '-c', f'source "{lib}"; resolve_repo "{name}"; echo "$REPO $SHORT"'], env=self.env)
                 self.assertEqual(result.stdout.strip(), f'opencollective/{slug} {short}', result.stderr)
+        for name in ('contributors-svg', 'opencollective/contributors-svg'):
+            result = run(['bash', '-c', f'source "{lib}"; resolve_repo "{name}"; echo "$REPO $SHORT"'], env=self.env)
+            self.assertEqual(result.stdout.strip(), 'opencollective/contributors-svg contributors-svg', result.stderr)
         result = run(['bash', '-c', f'source "{lib}"; resolve_repo taxes'], env=self.env)
         self.assertEqual(result.returncode, 2)
-        self.assertIn('<api|frontend|rest|images|pdf>', result.stderr)
+        self.assertIn('<api|frontend|rest|images|pdf|contributors-svg>', result.stderr)
 
     def test_shell_syntax(self):
         for file in SCRIPTS.glob('*.sh'):
@@ -170,6 +175,13 @@ sys.exit(r.returncode)
         result = self.call('wait-checks.sh', {'pr': pr()}, '1', env=env)
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertNotIn('GREEN', result.stdout)
+
+    def test_wait_treats_network_errors_as_pending(self):
+        fixture = {'prs': {'1': ['network-error'] * 3 + [pr()]}}
+        result = self.call('wait-checks.sh', fixture, '1', env=dict(self.env, TIMEOUT_MIN='1', GHR_SLEEP='0'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('GitHub unreachable', result.stdout)
+        self.assertIn('#1: GREEN', result.stdout)
 
     def test_wait_rechecks_previously_finished_prs(self):
         pending = pr(statusCheckRollup=[dict(name='test', status='IN_PROGRESS', conclusion='')])
