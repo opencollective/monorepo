@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Show failed jobs, error excerpts, and signatures from isolated failure summaries.
 # Without a supported summary, whole-log matches are incidental hints, never a diagnosis.
-# usage: failures.sh <api|frontend|rest|images|pdf> <pr-number> [max-lines-per-job]
+# usage: failures.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number> [max-lines-per-job]
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; pr="${2:?pr number}"; max="${3:-30}"
 SIG="$SCRIPT_DIR/flake-signatures.tsv"
 sha=$(pr_head_sha "$pr")

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Revisit updates whose Renovate PR was closed: list them from the Dependency Dashboard, or tick their
 # "recreate" checkbox so Renovate reopens the PR on its next run (the Mend app polls every few minutes).
-# usage: recreate.sh <api|frontend|rest|images|pdf>                          list "PR Closed (Blocked)" entries with the close reason
-#        recreate.sh <api|frontend|rest|images|pdf> <pr-number|branch> ...   tick those entries
+# usage: recreate.sh <api|frontend|rest|images|pdf|contributors-svg>                          list "PR Closed (Blocked)" entries with the close reason
+#        recreate.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number|branch> ...   tick those entries
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 
 dashboard() {

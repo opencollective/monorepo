@@ -19,6 +19,7 @@ skills-lock.json
 !.agents/skills/documentation-feature-pr
 !.agents/skills/i18n-frontend-translate
 !.agents/skills/i18n-frontend-search-translations
+!.agents/skills/package-updates
 !.agents/skills/security*
 !.agents/skills/support-ticket-reply
 

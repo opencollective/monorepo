@@ -139,6 +139,62 @@ Review code that fetches a URL from the request (images #641, five findings in o
   (504 for timeouts, 502 otherwise); only a blocked or oversized source is a cacheable 400.
   Prove each fix with a test that fails on the old head (`git stash`, rebuild, run the one test).
 
+## 4e. Sentry 11 (`@sentry/node`)
+
+CI stays green and production breaks (api #12231, 2026-10-05). Check, with the installed package:
+
+- `--require @sentry/node/preload` (api `scripts/cron.sh`) fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`:
+  v11 removed the `preload`, `init` and `loader` entry points (`npm view @sentry/node@11 exports`).
+  When the process imports the module calling `Sentry.init` anyway, drop the flag: v11 instruments
+  through diagnostics channels. Prove it with the old and new launcher on a trivial script.
+- Data collection: without a `dataCollection` option, v11 collects user info, cookies, all headers,
+  request and response bodies, GraphQL documents and variables, and database query data (defaults in
+  `@sentry/core` `resolveDataCollectionOptions.js`). `beforeSend` redaction only sees error events.
+  Keep the v10 baseline from https://docs.sentry.io/platforms/javascript/guides/node/migration/v10-to-v11/
+  (userInfo/cookies false, header and query deny lists, `httpBodies: []`, genAI, database and GraphQL off).
+  pdf runs v11 without it as of 2026-10-06.
+- Spans are streamed by default and `beforeSendTransaction` no longer runs: `traceLifecycle: 'static'`
+  keeps transactions. Probe with a dummy DSN: `Sentry.getClient().getOptions()` shows the resolved
+  options, and `client.on('beforeEnvelope', …)` the envelope item types (`transaction` expected).
+
+## 4f. Cypress 16
+
+- `Cypress.env()` is removed: non-sensitive values go through the config's `expose` and
+  `Cypress.expose()`, secrets through `cy.env()`. `Cypress.env('X')` only ever read `CYPRESS_X`: a
+  check guarded by a plain env var may never have run, and enabling it can surface a stale assertion.
+- `keystrokeDelay` default went from 10 to 0: forms re-rendering on each keystroke hit React's
+  "Maximum update depth exceeded" (#185) in grant submission and host agreements, and vendor
+  visibility timed out (frontend #12485). Restore `keystrokeDelay: 10` in the config.
+- Update the `cypress@<version>` entry in `allowScripts` (#12485 left 15.21.1; fixed by #12520).
+- `experimentalMemoryManagement` became `manageBrowserMemory` (on by default); `cy.exec` and `cy.end`
+  are removed; viewport and `blockHosts` can no longer be changed through `Cypress.config()` at runtime.
+- The tests are the only coverage: every failing shard after the bump is suspect until each spec's
+  failure is explained (a spec failing elsewhere too is the known flake, `failures.md`).
+
+## 4g. Production-only install
+
+With `legacy-peer-deps=true` (all repos on ESLint 10), npm does not install peer dependencies. A peer
+the runtime needs can be present only through a dev tool, so tests pass and production fails: Apollo
+Client 4 needs `rxjs`, which commitizen and lint-staged happened to install (contributors-svg #87).
+Check a runtime bump with the production tree: copy `package.json`, the lockfile and `.npmrc` to a
+scratch directory, `npm ci --omit=dev --ignore-scripts`, then `node -e "require('<pkg>')"` or start the
+built server. Fix by declaring the peer as a dependency. contributors-svg's CI `build` job does this.
+
+## 4h. Lockfile maintenance review
+
+- Before merging, the branch must be built on current main (`rebase.sh`): GitHub's three-way squash of
+  an older base produces a lockfile CI never tested, and a diff against main shows apparent downgrades
+  of packages main updated since (images #731, 2026-10-05).
+- List what changes against main at runtime:
+  `jq` over both lockfiles, packages without `"dev": true` whose version differs.
+  A top-level jump such as `chalk` 2 → 6 is usually npm moving copies around: check that each consumer
+  still gets a version in its range with `npm ls <pkg>` and the nested copies in the lockfile.
+- Compare `npm ls --all` problems (`invalid`, `UNMET`, excluding `UNMET OPTIONAL`) with main's: the
+  same or fewer, and the remaining ones known (ESLint 10 peer ranges, Babel 7 plugins under Jest).
+- Regenerating one locally (`rm package-lock.json && npm install --package-lock-only` on main's
+  `package.json`) gives exactly Renovate's lockfile (contributors-svg #123): a way to review it before
+  Renovate's next run, or to rebuild a branch whose foreign commit is obsolete.
+
 ## 5. Conventions
 
 Follow current user instructions and the service AGENTS.md over these historical defaults.
@@ -154,7 +210,18 @@ Follow current user instructions and the service AGENTS.md over these historical
 
 ## 6. Ecosystem gates (as of late Sept 2026, re-check before relying on them)
 
-- TypeScript 7: typescript-eslint and ts-unused-exports refuse it. Leave the Renovate PR open, user's call.
+- TypeScript 7: typescript-eslint and ts-unused-exports refuse it (typescript-eslint 8.71.0 declares
+  `typescript >=4.8.4 <6.1.0` on 2026-10-06). Keep the PR open and marked blocked.
+- graphql 17 in consumers: rest still needs graphql-request (7.4.0: graphql 14 to 16) and a schema
+  copy synced after api #11902 (`failures.md`). Apollo Client 3 stops at graphql 16; Apollo 4 accepts 17.
+- node-redis 6 (`redis`): RESP3 by default, so the server must be Redis 6 or newer
+  (`heroku redis:info -a <app>`: images, contributors-svg on 9.1 in October 2026), and a 5s
+  `commandTimeout` default. The v4/v5 command API (`createClient`, `connect`, `get`, `set` with
+  `{ EX }`, `del`, `flushAll`) is unchanged. From redis 3: rewrite promisified clients to this API.
+- node-fetch 3: ESM-only (fine on Node 24), and `response.buffer()` prints a deprecation warning:
+  use `Buffer.from(await response.arrayBuffer())`.
+- lru-cache 11: no default export (`import { LRUCache }`), `del`/`reset` became `delete`/`clear`, and
+  per-entry TTL is `set(key, value, { ttl })`: lru-cache 7 silently ignored a number there.
 - graphql 17 (frontend): needs Apollo Client 4, `@graphql-codegen/cli` 7 with a compatible preset, and `@graphql-eslint` support. Closed on 2026-09-25; revisit with Apollo 4 (issue opencollective/opencollective#8923).
 - `@graphql-codegen/cli` 7 pulls `client-preset` 6 which stops emitting schema object types: pin `@graphql-codegen/client-preset@5.3.0` as a direct devDependency.
 - `apollo-upload-client` ≥19 needs Apollo 4.
