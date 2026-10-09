@@ -18,6 +18,7 @@ skills-lock.json
 !.agents/skills/oc-triage
 !.agents/skills/documentation-feature-pr
 !.agents/skills/i18n-frontend-translate
+!.agents/skills/package-updates
 !.agents/skills/search-i18n-translations
 !.agents/skills/security*
 !.agents/skills/support-ticket-reply

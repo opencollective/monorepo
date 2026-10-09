@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Merge reviewed heads. --approve records an explicitly authorized review first.
-# usage: merge.sh <api|frontend|rest|images|pdf> [--approve] <pr-number> ...
+# usage: merge.sh <api|frontend|rest|images|pdf|contributors-svg> [--approve] <pr-number> ...
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 approve=0
 if [[ "${1:-}" == "--approve" ]]; then approve=1; shift; fi

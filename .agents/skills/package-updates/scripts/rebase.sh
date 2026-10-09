@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ask Renovate to rebase/retry a PR by ticking the checkbox in its body.
 # Renovate acts on its next run (the Mend app polls every few minutes; it does not wait for the schedule window).
-# usage: rebase.sh <api|frontend|rest|images|pdf> <pr-number> [<pr-number> ...]
+# usage: rebase.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number> [<pr-number> ...]
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 for pr in "$@"; do
   js=$(gh pr view "$pr" -R "$REPO" --json body,author,commits)

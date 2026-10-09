@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Fast status: repositories in parallel, no behind-main queries or logs.
-# usage: status.sh [api|frontend|rest|images|pdf ...] (default: all five)
+# usage: status.sh [api|frontend|rest|images|pdf|contributors-svg ...] (default: all six)
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-repos=("$@"); [[ ${#repos[@]} -gt 0 ]] || repos=(api frontend rest images pdf)
+repos=("$@"); [[ ${#repos[@]} -gt 0 ]] || repos=(api frontend rest images pdf contributors-svg)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 pids=()
 for i in "${!repos[@]}"; do

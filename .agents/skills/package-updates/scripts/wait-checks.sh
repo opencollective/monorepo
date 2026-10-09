@@ -2,7 +2,7 @@
 # Poll every PR each time; no sticky completion state across head changes.
 # After rebase: EXPECT_HEAD_CHANGE=1 and HEADS_FILE captured BEFORE requesting it.
 # HEADS_FILE format: one '<pr-number> <head-sha>' per line.
-# usage: wait-checks.sh <api|frontend|rest|images|pdf> <pr-number> ...
+# usage: wait-checks.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number> ...
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 [[ $# -gt 0 ]] || { echo "at least one PR is required" >&2; exit 2; }
 TIMEOUT_MIN="${TIMEOUT_MIN:-45}"; INTERVAL="${INTERVAL:-30}"
@@ -13,7 +13,10 @@ deadline=$(( $(date +%s) + TIMEOUT_MIN*60 ))
 while :; do
   all_done=1; result=0
   for pr in "$@"; do
-    js=$(gh pr view "$pr" -R "$REPO" --json headRefOid,statusCheckRollup,mergeStateStatus)
+    # a network error is a pending state, not a result: one dropped connection must not end the wait
+    if ! js=$(ghr pr view "$pr" -R "$REPO" --json headRefOid,statusCheckRollup,mergeStateStatus); then
+      echo "#$pr: GitHub unreachable, still waiting"; all_done=0; continue
+    fi
     sha=$(jq -r .headRefOid <<<"$js")
     if [[ "${EXPECT_HEAD_CHANGE:-0}" == 1 ]]; then
       old=$(awk -v pr="$pr" '$1 == pr {print $2}' "$HEADS_FILE")
