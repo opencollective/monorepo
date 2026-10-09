@@ -3,8 +3,8 @@
 Historical observations from September and October 2026. Verify relevant settings in the current checkout
 and GitHub before acting; these notes do not grant authorization or override AGENTS.md.
 
-All five repos (api, frontend, rest, images, pdf) use Renovate (Mend app) with the shared preset
-`local>opencollective/renovate-config` (`config:best-practices`, `:preserveSemverRanges`, schedule
+All six repos (api, frontend, rest, images, pdf, contributors-svg) use Renovate (Mend app) with the shared preset
+`opencollective/renovate-config` (`local>` or `github>`) (`config:best-practices`, `:preserveSemverRanges`, schedule
 weekdays 02:00-06:00 UTC and weekends, no automerge, `minimumReleaseAge` from best-practices except
 `@opencollective/*`). Automerge is disabled by config and `allow_auto_merge` is off, so every merge
 is a human decision.
@@ -35,7 +35,7 @@ squash merge is allowed. No CodeRabbit; the Codex connector reviews when the use
 `@codex review`, otherwise the local `codex review`. The whole CI runs in about 3 minutes (test 2-3 min). Local quality: `npm run lint:quiet`,
 `npm run prettier:check`, `npm run depcheck`, `npm run build`.
 The `test` job is cross-repo: it checks out **api `main`**, installs and builds it, restores and
-migrates the DB (Postgres 18 + Redis services), then `./scripts/run_test.sh` starts
+migrates the DB (Postgres + Redis services, see CI services below), then `./scripts/run_test.sh` starts
 both servers and runs Jest (`test/server/*`) against them. So a red `test` with no images-side cause
 usually means api main is broken or its schema moved (the images copies live in `src/graphql/`);
 compare with the latest run on images main and the api main runs before blaming the bump. Locally the
@@ -65,8 +65,45 @@ rendered PDFs to PNG snapshots in `test/__snapshots__` (`pdf-visual-diff`). A bu
 rendering path (`@react-pdf/*`, fonts, `pdf-visual-diff`, `canvas`/`pdfjs`, React) can move pixels:
 download the `snapshots-<run-id>-*` artifact the job uploads on failure and Read the diff PNGs before
 deciding between a real regression and an expected visual change (`npm run test:update` regenerates
-the snapshots; that change needs the user's review). `test` also uploads to Codecov with
+the snapshots; that change needs the user's review). Regenerate them only where CI renders: macOS and
+linux/arm64 already fail main's snapshots. `docker run --platform linux/amd64 node:24` with the
+worktree copied in passes main's 48 tests; run main there first, then delete the PNGs, run once to
+recreate and once with `OC_ENV=ci` to verify. `npm ci` replaces `node_modules` by itself (an
+`rm -rf` in the container script is refused by Claude Code's safety check). Before committing, compare
+old and new PNGs (same dimensions, per-pixel deltas with `pngjs`, a side-by-side crop of the largest
+change): pdf-visual-diff 0.16 moved at most 52 edge pixels (pdf #1180). `test` also uploads to Codecov with
 `fail_ci_if_error`, so a Codecov outage turns it red: an infra flake, rerun once.
+
+**contributors-svg** (`opencollective/contributors-svg`, checkout `~/Dev/opencollective/contributors-svg`,
+not in the monorepo; maintained since 2026-10-03): Node 24.x / npm 11.x (`.nvmrc` = 24, `engine-strict`,
+`legacy-peer-deps`), plain JavaScript compiled by Babel 8 (`"modules": "commonjs"`), Express 5,
+Hyperwatch 5 (`hyperwatch.app.mount`; off in production, and never runs without `HYPERWATCH_SECRET`
+once #125 merges), lru-cache 11 memory cache or Redis (`REDIS_URL`). The package-updates scripts
+cover it as `contributors-svg` (since 2026-10-09). CI (`ci.yml`): lint, prettier, test, build; plus
+`lockfile-lint.yml`. `test` runs `node --test` against the **source** (`@babel/register`): the real
+server in a child process, controllers or GitHub stubbed by `--require` preloads, a Redis service for
+`test/cache-redis.test.js` (`TEST_REDIS_URL`). `build` starts the built server with production
+dependencies only (`npm ci --omit=dev` in a copy). No Codecov. Approve-and-merge from the user's
+account works on bot PRs (`gh pr merge --squash --match-head-commit`); the user's own PRs need
+another maintainer. Heroku app `contributors-svg` (Redis 9.1 over `rediss://`, `heroku/nodejs`
+buildpack only); deploys with `npm run deploy:production`, no staging.
+
+Heroku apps (read-only checks, e.g. `heroku redis:info -a <app>`, `heroku config -a <app>` with
+secrets masked): images `oc-prod-image-server` / `oc-staging-image-server` (Redis 9.1), pdf
+`oc-prod-pdf` / `oc-staging-pdf-service` (Sentry 11 with tracing off: no `SENTRY_TRACES_SAMPLE_RATE`),
+api `opencollective-prod-api`, frontend `oc-prod-frontend`, rest `oc-prod-rest-api`.
+
+**CI services match production** (2026-10-09). Production runs PostgreSQL 16 and Heroku Key-Value
+Store, which is **Valkey**, not Redis (`heroku redis:info` says 9.1.1; Redis has no 9). CI uses
+`postgres:16.15` and `valkey/valkey:9.1` (`--entrypoint valkey-server`), with no digest:
+renovate-config caps postgres `<17` and valkey `<10` and disables digest pinning for service images,
+so a digest-only PR for them means a pin crept back. Keep a version tag: a bare `redis` follows
+`latest` (Codex flagged it, api #12290). The ubuntu-26.04 runner's PostgreSQL 18 `pg_restore` emits
+`SET transaction_timeout`, which 16 rejects: the restore runs api's `db_restore.sh` with
+`USE_DOCKER: true` (client tools from `postgres:16`). rest and images also set `SKIP_POSTINSTALL: 1`
+on their api `npm ci`, whose postinstall would restore with the runner's 18 tools on a cache miss
+(api and frontend skip it with `OC_ENV: ci`). Dependabot PRs get only Dependabot secrets: api,
+frontend, rest and pdf have a Dependabot `CODECOV_TOKEN` (pdf #1306 failed its Codecov upload without it).
 
 |                             | opencollective-api                                                                                                   | opencollective-frontend                                                                             |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -82,7 +119,7 @@ the snapshots; that change needs the user's review). `test` also uploads to Code
 | Local quality               | `npm run type:check`, `npm run lint:check`, `npm run prettier:check`                                                 | `npm run type:check`, `npm run lint:quiet`, `npm run prettier:check`                                |
 | Tests                       | Mocha (`npm run test`), needs Postgres                                                                               | Jest (`npm run test`), Cypress e2e                                                                  |
 
-Labels used by this skill in all five repos: `blocked` (`b60205`, with a "Blocked by …" comment) and
+Labels used by this skill in all six repos: `blocked` (`b60205`, with a "Blocked by …" comment) and
 `major` (`d93f0b`, a major of a critical dependency that only the user merges; api #11701 stripe v22
 is the first one).
 
