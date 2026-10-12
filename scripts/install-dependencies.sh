@@ -21,11 +21,11 @@ PROJECT_MAP[rest]="opencollective-rest"
 PROJECT_MAP[pdf]="opencollective-pdf"
 PROJECT_MAP[taxes]="opencollective-taxes"
 PROJECT_MAP[images]="opencollective-images"
-PROJECT_MAP[tools]="opencollective-tools"
-PROJECT_MAP[watch]="opencollective-watch"
+PROJECT_MAP[rss]="opencollective-rss"
+PROJECT_MAP[documentation]="opencollective-documentation"
 
 # All projects in default order
-ALL_PROJECTS=(frontend api rest pdf taxes images tools watch)
+ALL_PROJECTS=(frontend api rest pdf taxes images rss documentation)
 
 show_help() {
     echo "Usage: $0 [-h|--help] [project...]"
@@ -36,7 +36,7 @@ show_help() {
     echo "  -h, --help    Show this help message"
     echo ""
     echo "Projects (use short names):"
-    echo "  frontend, api, rest, pdf, taxes, images, tools, watch"
+    echo "  frontend, api, rest, pdf, taxes, images, rss, documentation"
     echo ""
     echo "Examples:"
     echo "  $0                    Install in all projects"
@@ -73,6 +73,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="${OC_MONOREPO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 cd "$WORKSPACE_ROOT"
 
+node "$SCRIPT_DIR/turbo.mjs" setup
+
 # Determine which projects to install
 if [[ ${#FILTER_ARGS[@]} -eq 0 ]]; then
     PROJECTS_TO_INSTALL=("${ALL_PROJECTS[@]}")
@@ -97,7 +99,7 @@ for project in "${PROJECTS_TO_INSTALL[@]}"; do
         continue
     fi
     (
-        if (cd "$dir" && npm install); then
+        if npm --prefix "$WORKSPACE_ROOT/$dir" --workspaces=false install; then
             echo -e "${GREEN}✓ $project done${NC}"
         else
             echo -e "${RED}✗ $project failed${NC}" >&2

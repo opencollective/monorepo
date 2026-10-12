@@ -82,7 +82,7 @@ systemctl enable --now docker
 # because noninteractive SSH/Orca processes may never source shell startup files.
 sudo -iu ubuntu bash /workspace/.vm/install-tools.sh
 node_version=$(jq -er '.node' /workspace/.vm/versions.json)
-for executable in node npm npx codex opencode eslint prettier tsc pm2; do
+for executable in node npm npx codex opencode eslint prettier tsc; do
   target="/home/ubuntu/.nvm/versions/node/v$node_version/bin/$executable"
   [[ -e "$target" ]] || { echo "Missing installed executable: $target" >&2; exit 1; }
   ln -sfn "$target" "/usr/local/bin/$executable"

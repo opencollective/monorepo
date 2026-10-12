@@ -1,0 +1,83 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "agentGuidance": false,
+  "cacheDir": ".turbo/cache",
+  "tasks": {
+    "build": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "lint": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "type:check": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:check": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "test": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "graphql:update": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "validate": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "dev": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "test:watch": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "lint:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "type:check:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:check:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "test:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "validate:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "dev:task": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "test:watch:task": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    }
+  }
+}

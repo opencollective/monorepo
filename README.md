@@ -74,10 +74,11 @@ VS Code will start with PostgreSQL, Mailpit, and other services running automati
 
 ### 3. Start the Application
 
-Run the start script to launch the frontend and API:
+Install the root toolchain and service dependencies, then launch the frontend and API:
 
 ```bash
-run
+./scripts/install-dependencies.sh frontend api
+npm run dev
 ```
 
 **Access the app:**
@@ -108,7 +109,7 @@ test opencollective-frontend/components/MyComponent.test.tsx
 test --watch opencollective-api/test/server/lib/mylib.test.ts
 ```
 
-The script automatically detects the project (frontend, api, pdf, rest) and runs the appropriate test command.
+The script automatically detects frontend, API, PDF, REST, images, taxes, and RSS test files and runs the appropriate test command.
 
 ## Shell shortcuts
 
@@ -130,3 +131,97 @@ If you prefer not to use DevContainers:
 1. Start dependencies: `./scripts/start-dependencies.sh --detach db mail uploads`
 2. Navigate to individual project directories (`opencollective-api`, `opencollective-frontend`)
 3. Follow the setup instructions in their README files
+4. Install orchestration tooling with `npm run install:tooling`
+
+## Turborepo workflow
+
+Turbo orchestrates the eight npm repositories. Each repository keeps its own
+`node_modules`, npm lockfile, Git history, CI, and deployment entrypoints. The root
+workspace manifest describes package discovery, not a shared dependency install.
+Use `npm run install:tooling` for the separately locked Turbo/Prettier toolchain,
+and `./scripts/install-dependencies.sh [frontend api ...]` for isolated service
+installs. Do not use `npm install` or `npm ci` at the workspace root: npm resolves
+all workspace dependency trees even with workspace installation disabled.
+
+The launcher generates an ignored root lockfile containing package-graph metadata.
+It does not replace service lockfiles or install service dependencies. Each cached
+task explicitly hashes its service lockfile; the launcher also supplies a per-service
+lockfile digest because the graph lock does not resolve external dependencies. Missing submodules are omitted; an
+explicit selection of an uninitialized service reports an error. Re-run setup
+after adding repositories.
+
+```bash
+npm run dev                         # frontend and API
+run frontend:staging api             # environment choice applies to frontend only
+npm run dev -- rss documentation     # additional service and docs preview
+npm run build                       # initialized packages that provide builds
+npm run check                       # lint, types, formatting, docs validation
+npm run test -- frontend taxes       # unit test tasks for selected services
+npm run format                      # write formatting changes; never cached
+npm run turbo -- run lint --filter=opencollective-api
+npm run turbo -- run build:finalize --filter=opencollective-frontend --dry=json
+```
+
+Tasks execute concurrently according to their prerequisites. The frontend Next.js
+build precedes its server copy, which precedes Cloudflare IP refresh. Compilation
+artifacts are cached; Cloudflare refresh always runs after restoration. Development,
+watch tasks, schema refresh, database changes, API database tests, and E2E execution
+are uncached. Service processes retain their existing reload tools. Interactive
+`run` sessions show Turbo's terminal UI; noninteractive sessions stream logs.
+Ctrl-C stops the session. PM2 and `run --background` have been removed.
+
+`./scripts/test.sh [--watch] <service/test-file>...` forwards file arguments to the
+selected runner through Turbo. `./scripts/update-gql.sh [service...]` refreshes
+API/frontend/PDF schemas against the running API. REST/images copy frontend
+schemas when available and otherwise fetch their published schemas. When frontend
+is selected, copying waits for its refresh and code generation.
+
+Dependency installation and manual npm linking keep their existing behavior.
+Turbo does not create or remove package links. When working with manually linked
+packages, disable task-result caching with `--cache=local:,remote:`.
+
+### Standalone repositories and CI
+
+Inside a service, the usual `npm run dev`, `npm run build`, `npm run lint`,
+`npm run type:check`, formatting, and test commands run through Turbo by default.
+Runner arguments keep their normal syntax, such as `npm test -- path/to/test.ts`.
+Public commands enter Turbo; internal `:task` scripts execute the underlying tools.
+The workspace launcher selects those internal tasks directly and accepts public
+names with `npm run turbo -- run lint type:check --filter=opencollective-api`.
+For advanced standalone Turbo options, use internal task names, for example
+`npm run turbo -- run lint:task --dry=json`.
+
+`turbo.json` contains workspace overrides; `turbo.standalone.json`
+contains the corresponding standalone graph. Update both when changing tasks.
+Independent `npm ci` installs and Heroku builds remain supported.
+
+All service CI workflows, including documentation link validation, use Vercel
+Remote Cache through GitHub OIDC on repository branch pushes and PRs whose head
+repository matches the workflow repository.
+Keep the existing organization-level `TURBO_TEAM` Actions variable available to
+each repository. In team Settings → Build and
+Deployment → OIDC Policies for CLI Access, configure Turborepo CLI policies
+restricted to each service repository and `.github/workflows/ci.yml`. API and
+frontend policies also cover their E2E workflows, including frontend's reusable
+E2E preparation workflow. Allow branch pushes and
+pull-request claims; remove any main-only branch restriction. API E2E runs on
+branch pushes. Use the default audience and update existing policies instead of
+adding overlapping ones.
+
+Jobs grant `id-token: write`; Vercel's setup action exports a short-lived cache
+token before Turbo runs and revokes it afterward. No `TURBO_TOKEN` repository
+secret is required. Fork PRs, tag pushes, other events, and runs without
+`TURBO_TEAM` use local caching.
+
+Dependency downloads, E2E build artifact uploads, coverage reporting, and service
+readiness/cleanup remain separate from task-result caching.
+
+Adopt service changes before the root workflow: taxes/RSS/documentation and
+images/PDF/REST first, then API/frontend together. Their E2E stack checkouts must
+contain the companion Turbo changes. Commit service changes from their individual
+feature worktrees, then update workspace submodule pointers explicitly if desired.
+Git-based `--affected` filtering at the parent cannot reliably detect independent
+submodule edits; use package filters and task caching there.
+
+See [Turbo CI](https://turborepo.dev/docs/crafting-your-repository/constructing-ci)
+and [Vercel OIDC setup](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#create-an-oidc-policy).

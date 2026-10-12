@@ -150,19 +150,20 @@ test("shell shortcuts find the workspace from a service and nested worktree", (t
   }
 });
 
-test("run script resolves its root before starting PM2 from a service directory", (t) => {
+test("run script delegates service arguments to the Turbo launcher from a service directory", (t) => {
   const directory = fixture(t);
   mkdirSync(path.join(directory, "scripts"));
   copyFileSync(
     path.join(root, "scripts/run.sh"),
     path.join(directory, "scripts/run.sh"),
   );
-  writeFileSync(path.join(directory, "bin/npx"), "#!/bin/sh\npwd\n", {
-    mode: 0o755,
-  });
+  writeFileSync(
+    path.join(directory, "scripts/turbo.mjs"),
+    'import { dirname } from "node:path"; console.log(JSON.stringify([dirname(import.meta.dirname), ...process.argv.slice(2)]));\n',
+  );
   const result = spawnSync(
     "bash",
-    [path.join(directory, "scripts/run.sh"), "--background", "api"],
+    [path.join(directory, "scripts/run.sh"), "frontend:staging", "api"],
     {
       cwd: path.join(directory, "opencollective-api"),
       env: { ...process.env, PATH: `${directory}/bin:${process.env.PATH}` },
@@ -170,5 +171,10 @@ test("run script resolves its root before starting PM2 from a service directory"
     },
   );
   assert.equal(result.status, 0, result.stderr);
-  assert.ok(result.stdout.includes(directory));
+  assert.deepEqual(JSON.parse(result.stdout), [
+    directory,
+    "dev",
+    "frontend:staging",
+    "api",
+  ]);
 });

@@ -122,7 +122,6 @@ test("latest resolves a stable nvm release and installs npm tools on pinned Node
     "eslint@latest",
     "prettier@latest",
     "typescript@latest",
-    "pm2@latest",
   ]);
 });
 

@@ -1,0 +1,9 @@
+{
+  "name": "opencollective-workspace-tooling",
+  "private": true,
+  "packageManager": "npm@11.19.0",
+  "devDependencies": {
+    "turbo": "2.11.7",
+    "prettier": "3.9.9"
+  }
+}
