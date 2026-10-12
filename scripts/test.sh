@@ -16,17 +16,12 @@ NC='\033[0m' # No Color
 
 # Parse arguments
 WATCH_MODE=false
-LOCAL_FLAGS=()
 TEST_PATHS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --watch|-w)
             WATCH_MODE=true
-            shift
-            ;;
-        --local-taxes)
-            LOCAL_FLAGS+=("--local-taxes")
             shift
             ;;
         -h|--help)
@@ -125,4 +120,4 @@ if [[ "$PROJECT" == opencollective-images ]]; then
 fi
 
 # Forward all file arguments to the selected Turbo task.
-exec node "$SCRIPT_DIR/turbo.mjs" "$TEST_CMD" "$PROJECT" "${LOCAL_FLAGS[@]}" -- "${RELATIVE_PATHS[@]}"
+exec node "$SCRIPT_DIR/turbo.mjs" "$TEST_CMD" "$PROJECT" -- "${RELATIVE_PATHS[@]}"

@@ -29,12 +29,7 @@
     "test:tooling": "node --test scripts/*.test.mjs .vm/*.test.mjs",
     "graphql:update": "node scripts/turbo.mjs graphql:update",
     "install:services": "bash scripts/install-dependencies.sh",
-    "taxes:link": "node scripts/turbo.mjs run taxes:link:packages",
-    "taxes:unlink": "node scripts/local-taxes.mjs unlink",
-    "dev:local": "node scripts/turbo.mjs dev --local-taxes",
-    "build:local": "node scripts/turbo.mjs build --local-taxes",
     "turbo": "node scripts/turbo.mjs",
-    "install:tooling": "node scripts/turbo.mjs setup",
-    "taxes:link:packages": "node scripts/local-taxes.mjs link"
+    "install:tooling": "node scripts/turbo.mjs setup"
   }
 }

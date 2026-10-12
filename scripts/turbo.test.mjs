@@ -4,6 +4,7 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   cpSync,
   existsSync,
@@ -30,8 +31,7 @@ function fixture(t, services = ["frontend", "api", "taxes"]) {
     join(root, "scripts/tooling/node_modules"),
     "dir",
   );
-  for (const file of ["turbo.mjs", "local-taxes.mjs"])
-    cpSync(join(source, "scripts", file), join(root, "scripts", file));
+  cpSync(join(source, "scripts/turbo.mjs"), join(root, "scripts/turbo.mjs"));
   const git = (cwd, ...args) => {
     const result = spawnSync("git", args, { cwd, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
@@ -53,7 +53,6 @@ function fixture(t, services = ["frontend", "api", "taxes"]) {
           "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
         dev: "node dev.cjs",
         "dev:environment": `EXTRA_ENV="$OC_DEV_ENV_${short.toUpperCase()}" node dev.cjs`,
-        "dev:local": "node dev.cjs",
         test: "node args.cjs",
       },
     };
@@ -95,12 +94,6 @@ function fixture(t, services = ["frontend", "api", "taxes"]) {
         persistent: true,
         cache: false,
         passThroughEnv: ["*"],
-      },
-      "dev:local": {
-        persistent: true,
-        cache: false,
-        passThroughEnv: ["*"],
-        dependsOn: ["//#taxes:link:packages"],
       },
       test: { cache: false, passThroughEnv: ["*"] },
     };
@@ -156,7 +149,7 @@ function fixture(t, services = ["frontend", "api", "taxes"]) {
   return { root, env, run };
 }
 
-test("partial checkout selects default services, isolates environments, and orders local taxes", (t) => {
+test("partial checkout selects default services and isolates environments", (t) => {
   const { run } = fixture(t);
   let result = run("dev", "frontend:staging", "api", "--dry=json");
   assert.equal(result.status, 0, result.stderr);
@@ -164,17 +157,11 @@ test("partial checkout selects default services, isolates environments, and orde
     JSON.parse(result.stdout).tasks.map((task) => task.taskId),
     ["opencollective-api#dev", "opencollective-frontend#dev:environment"],
   );
-  result = run("dev", "--local-taxes", "--dry=json");
+  result = run("dev", "--dry=json");
   assert.equal(result.status, 0, result.stderr);
-  const tasks = JSON.parse(result.stdout).tasks;
   assert.deepEqual(
-    tasks.find((task) => task.taskId === "//#taxes:link:packages").dependencies,
-    ["@opencollective/taxes#build:compile"],
-  );
-  assert.deepEqual(
-    tasks.find((task) => task.taskId === "opencollective-api#dev:local")
-      .dependencies,
-    ["//#taxes:link:packages"],
+    JSON.parse(result.stdout).tasks.map((task) => task.taskId),
+    ["opencollective-api#dev", "opencollective-frontend#dev"],
   );
   assert.notEqual(run("dev", "unknown").status, 0);
   assert.notEqual(run("dev", "frontend:", "--dry=json").status, 0);
@@ -255,45 +242,27 @@ test("terminating a foreground session stops its service process", async (t) => 
   assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
 });
 
-test("local taxes linking preserves and restores published installations", (t) => {
+test("ordinary commands preserve manually linked taxes without building or relinking it", (t) => {
   const { root, run } = fixture(t);
-  for (const short of ["frontend", "api"]) {
-    const installed = join(
+  const taxes = join(root, "opencollective-taxes");
+  const links = ["frontend", "api"].map((short) => {
+    const scope = join(
       root,
-      `opencollective-${short}/node_modules/@opencollective/taxes`,
+      `opencollective-${short}/node_modules/@opencollective`,
     );
-    mkdirSync(installed, { recursive: true });
-    writeFileSync(join(installed, "published.txt"), short);
-  }
-  let result = run("run", "taxes:link:packages");
+    mkdirSync(scope, { recursive: true });
+    const link = join(scope, "taxes");
+    symlinkSync(taxes, link, "dir");
+    return link;
+  });
+  let result = run("dev", "--dry=json");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.ok(
-    existsSync(
-      join(
-        root,
-        "opencollective-frontend/node_modules/@opencollective/taxes/dist/index.js",
-      ),
-    ),
+  assert.deepEqual(
+    JSON.parse(result.stdout).tasks.map((task) => task.taskId),
+    ["opencollective-api#dev", "opencollective-frontend#dev"],
   );
-  assert.match(run("build", "frontend").stderr, /Local taxes is linked/);
-  result = spawnSync(
-    process.execPath,
-    [join(root, "scripts/local-taxes.mjs"), "unlink"],
-    {
-      cwd: root,
-      env: { ...process.env, OC_MONOREPO_ROOT: root },
-      encoding: "utf8",
-    },
-  );
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(
-    readFileSync(
-      join(
-        root,
-        "opencollective-frontend/node_modules/@opencollective/taxes/published.txt",
-      ),
-      "utf8",
-    ),
-    "frontend",
-  );
+  result = run("build", "frontend", "--cache=local:,remote:");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  for (const link of links) assert.equal(readlinkSync(link), taxes);
+  assert.equal(existsSync(join(taxes, ".turbo/runs")), false);
 });

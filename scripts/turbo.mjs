@@ -6,7 +6,6 @@ import {
   readFileSync,
   writeFileSync,
   symlinkSync,
-  lstatSync,
   mkdirSync,
   renameSync,
 } from "node:fs";
@@ -116,8 +115,6 @@ export function taskArguments(argv) {
   if (!task || task === "--help" || task === "-h") return { help: true };
   if (task === "run") return { turbo: ["run", ...args] };
   if (task === "setup") return { setup: true };
-  const local = args.includes("--local-taxes");
-  args = args.filter((arg) => arg !== "--local-taxes");
   if (args.some((arg) => ["-b", "--background"].includes(arg)))
     throw new Error(
       "Detached mode was removed. Run a foreground Turbo session; Ctrl-C stops its services.",
@@ -151,16 +148,6 @@ export function taskArguments(argv) {
       throw new Error(
         `Unknown or uninitialized project '${name}'. Available: ${available.map((pkg) => pkg.short).join(", ")}`,
       );
-    const taxesLink = join(pkg.directory, "node_modules/@opencollective/taxes");
-    if (
-      !local &&
-      existsSync(taxesLink) &&
-      lstatSync(taxesLink).isSymbolicLink() &&
-      ["build", "type:check", "test", "dev"].includes(task)
-    )
-      throw new Error(
-        "Local taxes is linked. Use --local-taxes or npm run taxes:unlink before running this task.",
-      );
     if (
       extra.length ||
       (environment !== undefined &&
@@ -189,11 +176,9 @@ export function taskArguments(argv) {
       )
         ? "graphql:sync:after-frontend"
         : "graphql:sync:local";
-    if (local && ["api", "frontend", "pdf"].includes(short))
-      leaf = task === "build" ? "build:local" : `${leaf}:local`;
     if (environment) {
       env[`OC_DEV_ENV_${short.toUpperCase()}`] = environment;
-      leaf = local ? "dev:environment:local" : "dev:environment";
+      leaf = "dev:environment";
     }
     if (!pkg.scripts[leaf])
       throw new Error(
@@ -203,8 +188,6 @@ export function taskArguments(argv) {
   });
   if (!tasks.length)
     throw new Error(`No initialized packages provide '${task}'.`);
-  if (local && !available.some((pkg) => pkg.short === "taxes"))
-    throw new Error("Local taxes requires the taxes repository.");
   // Exact package task IDs avoid starting runtime dependencies or forwarding one
   // service's environment to another. Let the graph schedule prerequisites.
   return {
@@ -228,7 +211,7 @@ async function main() {
   const parsed = taskArguments(process.argv.slice(2));
   if (parsed.help) {
     console.log(
-      "Usage: node scripts/turbo.mjs <task> [project[:environment]...] [--local-taxes] [--filter=...] [--dry=json] [-- runner-arguments]\nDefault dev services: frontend api. Use run <tasks> for the native Turbo CLI.\nInstall toolchain: npm run install:tooling. Install services: npm run install:services.",
+      "Usage: node scripts/turbo.mjs <task> [project[:environment]...] [--filter=...] [--dry=json] [-- runner-arguments]\nDefault dev services: frontend api. Use run <tasks> for the native Turbo CLI.\nInstall toolchain: npm run install:tooling. Install services: npm run install:services.",
     );
     return;
   }

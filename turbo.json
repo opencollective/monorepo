@@ -44,11 +44,6 @@
       "cache": false,
       "passThroughEnv": ["*"],
       "persistent": true
-    },
-    "//#taxes:link:packages": {
-      "cache": false,
-      "passThroughEnv": ["*"],
-      "dependsOn": ["@opencollective/taxes#build:compile"]
     }
   }
 }

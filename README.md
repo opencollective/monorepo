@@ -176,25 +176,9 @@ API/frontend/PDF schemas against the running API. REST/images copy frontend
 schemas when available and otherwise fetch their published schemas. When frontend
 is selected, copying waits for its refresh and code generation.
 
-### Working on the taxes library
-
-Consumers use their installed published taxes package by default. For local work:
-
-```bash
-npm run taxes:link                   # optional explicit linking
-npm run dev:local
-npm run build:local -- api frontend pdf
-npm run type:check -- api --local-taxes
-npm run taxes:unlink
-```
-
-Local tasks build taxes before linking it into initialized API/frontend/PDF
-consumers. Links preserve published installations in each consumer's `.turbo`
-directory; unlink restores them without modifying manifests or lockfiles. Local
-consumer tasks bypass caching to avoid mixing published and linked dependencies.
-Links persist until unlinking; the launcher rejects ordinary build/test/type/dev
-commands while linked. Use the local task entrypoints while links are active.
-Do not run standalone cached Turbo commands against linked dependencies.
+Dependency installation and manual npm linking keep their existing behavior.
+Turbo does not create or remove package links. When working with manually linked
+packages, disable task-result caching with `--cache=local:,remote:`.
 
 ### Standalone repositories and CI
 
