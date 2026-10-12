@@ -21,6 +21,7 @@ skills-lock.json
 !.agents/skills/support-ticket-reply
 
 /node_modules
+/scripts/tooling/node_modules
 .turbo/
 
 # Generated task graph metadata; installs are locked in scripts/tooling.
