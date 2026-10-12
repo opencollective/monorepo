@@ -44,6 +44,40 @@
       "cache": false,
       "passThroughEnv": ["*"],
       "persistent": true
+    },
+    "lint:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "type:check:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:check:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "test:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "validate:task": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "dev:task": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "test:watch:task": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
     }
   }
 }

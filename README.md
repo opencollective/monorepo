@@ -182,8 +182,16 @@ packages, disable task-result caching with `--cache=local:,remote:`.
 
 ### Standalone repositories and CI
 
-Inside a service, use `npm run turbo -- run <task>` or the existing `npm run build`
-entrypoint. `turbo.json` contains workspace overrides; `turbo.standalone.json`
+Inside a service, the usual `npm run dev`, `npm run build`, `npm run lint`,
+`npm run type:check`, formatting, and test commands run through Turbo by default.
+Runner arguments keep their normal syntax, such as `npm test -- path/to/test.ts`.
+Public commands enter Turbo; internal `:task` scripts execute the underlying tools.
+The workspace launcher selects those internal tasks directly and accepts public
+names with `npm run turbo -- run lint type:check --filter=opencollective-api`.
+For advanced standalone Turbo options, use internal task names, for example
+`npm run turbo -- run lint:task --dry=json`.
+
+`turbo.json` contains workspace overrides; `turbo.standalone.json`
 contains the corresponding standalone graph. Update both when changing tasks.
 Independent `npm ci` installs and Heroku builds remain supported.
 

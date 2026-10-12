@@ -219,6 +219,88 @@ test("test arguments remain separate and task failures propagate", (t) => {
   assert.notEqual(run("test", "frontend").status, 0);
 });
 
+function adoptEntrypoints(root, short) {
+  const directory = join(root, `opencollective-${short}`);
+  const manifest = join(directory, "package.json");
+  const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+  const config = JSON.parse(
+    readFileSync(join(directory, "turbo.json"), "utf8"),
+  );
+  for (const task of ["dev", "test"]) {
+    pkg.scripts[`${task}:task`] = pkg.scripts[task];
+    pkg.scripts[task] = `npm run turbo -- run ${task}:task --`;
+    config.tasks[`${task}:task`] = config.tasks[task];
+    delete config.tasks[task];
+  }
+  pkg.scripts.turbo =
+    "turbo --skip-infer --single-package --root-turbo-json=turbo.standalone.json";
+  writeFileSync(manifest, JSON.stringify(pkg));
+  writeFileSync(join(directory, "turbo.json"), JSON.stringify(config));
+  writeFileSync(
+    join(directory, "turbo.standalone.json"),
+    JSON.stringify({ tasks: config.tasks }),
+  );
+  symlinkSync(
+    join(root, "scripts/tooling/node_modules"),
+    join(directory, "node_modules"),
+    "dir",
+  );
+  return directory;
+}
+
+test("workspace schedules underlying service tasks and preserves runner arguments", (t) => {
+  const { root, run } = fixture(t, ["frontend"]);
+  const directory = adoptEntrypoints(root, "frontend");
+  const result = run(
+    "test",
+    "frontend",
+    "--",
+    "test/a file.test.ts",
+    "--runInBand",
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /\["test\/a file.test.ts","--runInBand"\]/);
+  assert.match(result.stdout, /test:task/);
+  writeFileSync(join(directory, "args.cjs"), "process.exit(7)");
+  assert.notEqual(run("test", "frontend").status, 0);
+});
+
+test("service npm commands run inside a parent workspace and forward runner arguments", (t) => {
+  const { root, env } = fixture(t, ["frontend"]);
+  const directory = adoptEntrypoints(root, "frontend");
+  const result = spawnSync(
+    "npm",
+    ["test", "--", "test/a file.test.ts", "--runInBand"],
+    {
+      cwd: directory,
+      env,
+      encoding: "utf8",
+      timeout: 20000,
+    },
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /test:task/);
+  assert.match(result.stdout, /\["test\/a file.test.ts","--runInBand"\]/);
+});
+
+test("native workspace task aliases preserve filtering and qualified task selection", (t) => {
+  const { root, run } = fixture(t, ["frontend", "api"]);
+  adoptEntrypoints(root, "frontend");
+  adoptEntrypoints(root, "api");
+  let result = run("run", "test", "--filter=opencollective-api", "--dry=json");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(
+    JSON.parse(result.stdout).tasks.map((task) => task.taskId),
+    ["opencollective-api#test:task"],
+  );
+  result = run("run", "opencollective-frontend#test", "--dry=json");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(
+    JSON.parse(result.stdout).tasks.map((task) => task.taskId),
+    ["opencollective-frontend#test:task"],
+  );
+});
+
 test("terminating a foreground session stops its service process", async (t) => {
   const { root, env } = fixture(t, ["frontend"]);
   const child = spawn(

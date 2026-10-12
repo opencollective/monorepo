@@ -36,6 +36,16 @@ export function packages() {
   });
 }
 
+// Services are independent repository roots, so their public npm commands enter
+// Turbo too. Select the underlying task when scheduling them from the workspace.
+export function serviceTask(pkg, task) {
+  if (pkg.scripts[`${task}:task`]) return `${task}:task`;
+  const entrypoint = pkg.scripts[task]?.match(
+    /^npm run turbo -- run (\S+)(?: --)?$/,
+  );
+  return entrypoint ? entrypoint[1] : task;
+}
+
 // npm still resolves every workspace during a root install. Keep the toolchain
 // independently locked and use a generated lock only for Turbo's package graph.
 export function prepare() {
@@ -113,7 +123,31 @@ export function runTurbo(args, env = process.env) {
 export function taskArguments(argv) {
   let [task, ...args] = argv;
   if (!task || task === "--help" || task === "-h") return { help: true };
-  if (task === "run") return { turbo: ["run", ...args] };
+  if (task === "run") {
+    const available = packages();
+    const separator = args.findIndex((arg) => arg.startsWith("-"));
+    const targets = separator < 0 ? args : args.slice(0, separator);
+    const options = separator < 0 ? [] : args.slice(separator);
+    return {
+      turbo: [
+        "run",
+        ...new Set(
+          targets.flatMap((target) => {
+            const [name, command] = target.split("#");
+            if (command) {
+              const pkg = available.find((pkg) => pkg.name === name);
+              return pkg ? `${name}#${serviceTask(pkg, command)}` : target;
+            }
+            const providers = available.filter((pkg) => pkg.scripts[target]);
+            return providers.length
+              ? providers.map((pkg) => serviceTask(pkg, target))
+              : target;
+          }),
+        ),
+        ...options,
+      ],
+    };
+  }
   if (task === "setup") return { setup: true };
   if (args.some((arg) => ["-b", "--background"].includes(arg)))
     throw new Error(
@@ -180,6 +214,7 @@ export function taskArguments(argv) {
       env[`OC_DEV_ENV_${short.toUpperCase()}`] = environment;
       leaf = "dev:environment";
     }
+    leaf = serviceTask(pkg, leaf);
     if (!pkg.scripts[leaf])
       throw new Error(
         `${pkg.name} has no '${leaf}' command. Adopt its Turbo configuration first.`,
