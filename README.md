@@ -20,11 +20,11 @@ To take full advantage of these benefits, it is recommended that you go through 
 
 ## Getting Started
 
-For a persistent KVM development machine (accessed through Orca and VS Code Remote
-SSH, for example), follow [the development VM guide](.vm/README.md). It installs the
-toolchain and Docker inside the VM.
-Start its interactive setup with `./scripts/vm.sh setup` after installing the host
-prerequisites. The DevContainer workflow below remains available.
+For a persistent development microVM with SSH/editor access, follow
+[the microsandbox guide](.vm/README.md). Run `./scripts/vm.sh setup` after
+installing microsandbox and enabling KVM access. It mounts the host checkout at
+`/workspace` and installs the toolchain and Docker inside the sandbox. Use native
+`msb` commands for administration. The DevContainer workflow below remains available.
 
 ### Prerequisites
 
