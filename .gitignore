@@ -1,7 +1,6 @@
 logs
 test
 priv/*
-package-lock.json
 opencode.json
 .opencode
 .worktrees
@@ -20,3 +19,9 @@ skills-lock.json
 !.agents/skills/search-i18n-translations
 !.agents/skills/security*
 !.agents/skills/support-ticket-reply
+
+/node_modules
+.turbo/
+
+# Generated task graph metadata; installs are locked in scripts/tooling.
+/package-lock.json

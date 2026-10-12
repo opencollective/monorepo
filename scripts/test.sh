@@ -16,12 +16,17 @@ NC='\033[0m' # No Color
 
 # Parse arguments
 WATCH_MODE=false
+LOCAL_FLAGS=()
 TEST_PATHS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --watch|-w)
             WATCH_MODE=true
+            shift
+            ;;
+        --local-taxes)
+            LOCAL_FLAGS+=("--local-taxes")
             shift
             ;;
         -h|--help)
@@ -60,17 +65,12 @@ fi
 # Helper to get project and relative path for a given path
 get_project_and_relative_path() {
     local path="$1"
-    if [[ "$path" == opencollective-frontend/* ]]; then
-        echo "opencollective-frontend ${path#opencollective-frontend/}"
-    elif [[ "$path" == opencollective-api/* ]]; then
-        echo "opencollective-api ${path#opencollective-api/}"
-    elif [[ "$path" == opencollective-pdf/* ]]; then
-        echo "opencollective-pdf ${path#opencollective-pdf/}"
-    elif [[ "$path" == opencollective-rest/* ]]; then
-        echo "opencollective-rest ${path#opencollective-rest/}"
-    else
-        echo ""
-    fi
+    local project="${path%%/*}"
+    case "$project" in
+        opencollective-frontend|opencollective-api|opencollective-pdf|opencollective-rest|opencollective-images|opencollective-taxes|opencollective-rss)
+            printf '%s %s\n' "$project" "${path#*/}" ;;
+        *) return 0 ;;
+    esac
 }
 
 # Determine project from first path and collect relative paths (all must be same project)
@@ -81,7 +81,7 @@ for TEST_PATH in "${TEST_PATHS[@]}"; do
     result=$(get_project_and_relative_path "$TEST_PATH")
     if [[ -z "$result" ]]; then
         echo -e "${RED}Error: Could not determine project from path: $TEST_PATH${NC}" >&2
-        echo "Path should start with one of: opencollective-frontend/, opencollective-api/, opencollective-pdf/, opencollective-rest/"
+        echo "Path should start with a supported opencollective- service directory"
         exit 1
     fi
     path_project="${result%% *}"
@@ -119,6 +119,10 @@ echo -e "${YELLOW}Project: $PROJECT${NC}"
 echo -e "${YELLOW}Relative path(s): ${RELATIVE_PATHS[*]}${NC}"
 echo ""
 
-# Run the test command in the project directory (pass all relative paths)
-cd "$PROJECT_DIR"
-npm run "$TEST_CMD" -- "${RELATIVE_PATHS[@]}"
+if [[ "$PROJECT" == opencollective-images ]]; then
+    TEST_CMD="test:file"
+    if [[ "$WATCH_MODE" == true ]]; then TEST_CMD="test:file:watch"; fi
+fi
+
+# Forward all file arguments to the selected Turbo task.
+exec node "$SCRIPT_DIR/turbo.mjs" "$TEST_CMD" "$PROJECT" "${LOCAL_FLAGS[@]}" -- "${RELATIVE_PATHS[@]}"

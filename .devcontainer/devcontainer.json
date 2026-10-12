@@ -72,8 +72,7 @@
   "postStartCommand": "grep -qF 'shell-aliases.sh' ~/.bashrc || echo 'source /workspace/.devcontainer/shell-aliases.sh' >> ~/.bashrc",
   "postCreateCommand": {
     "cypressDependencies": "sudo apt update && sudo apt install -y --no-install-recommends libgtk-3-0 libgbm-dev libnotify-dev libnss3 libxss1 libasound2 libxtst6 xauth xvfb",
-    "installFrontendDependencies": "cd opencollective-frontend && npm install",
-    "installAPIDependencies": "cd opencollective-api && npm install",
-    "globalNpmPackages": "npm install -g eslint prettier pm2"
+    "installProjectDependencies": "./scripts/install-dependencies.sh frontend api",
+    "globalNpmPackages": "npm install -g eslint prettier"
   }
 }

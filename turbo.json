@@ -1,0 +1,54 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "agentGuidance": false,
+  "cacheDir": ".turbo/cache",
+  "tasks": {
+    "build": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "lint": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "type:check": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format:check": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "format": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "test": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "graphql:update": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "validate": {
+      "cache": false,
+      "passThroughEnv": ["*"]
+    },
+    "dev": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "test:watch": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "persistent": true
+    },
+    "//#taxes:link:packages": {
+      "cache": false,
+      "passThroughEnv": ["*"],
+      "dependsOn": ["@opencollective/taxes#build:compile"]
+    }
+  }
+}

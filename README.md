@@ -74,10 +74,11 @@ VS Code will start with PostgreSQL, Mailpit, and other services running automati
 
 ### 3. Start the Application
 
-Run the start script to launch the frontend and API:
+Install the root toolchain and service dependencies, then launch the frontend and API:
 
 ```bash
-run
+./scripts/install-dependencies.sh frontend api
+npm run dev
 ```
 
 **Access the app:**
@@ -108,7 +109,7 @@ test opencollective-frontend/components/MyComponent.test.tsx
 test --watch opencollective-api/test/server/lib/mylib.test.ts
 ```
 
-The script automatically detects the project (frontend, api, pdf, rest) and runs the appropriate test command.
+The script automatically detects frontend, API, PDF, REST, images, taxes, and RSS test files and runs the appropriate test command.
 
 ## Shell shortcuts
 
@@ -130,3 +131,90 @@ If you prefer not to use DevContainers:
 1. Start dependencies: `./scripts/start-dependencies.sh --detach db mail uploads`
 2. Navigate to individual project directories (`opencollective-api`, `opencollective-frontend`)
 3. Follow the setup instructions in their README files
+4. Install orchestration tooling with `npm run install:tooling`
+
+## Turborepo workflow
+
+Turbo orchestrates the eight npm repositories. Each repository keeps its own
+`node_modules`, npm lockfile, Git history, CI, and deployment entrypoints. The root
+workspace manifest describes package discovery, not a shared dependency install.
+Use `npm run install:tooling` for the separately locked Turbo/Prettier toolchain,
+and `./scripts/install-dependencies.sh [frontend api ...]` for isolated service
+installs. Do not use `npm install` or `npm ci` at the workspace root: npm resolves
+all workspace dependency trees even with workspace installation disabled.
+
+The launcher generates an ignored root lockfile containing package-graph metadata.
+It does not replace service lockfiles or install service dependencies. Each cached
+task explicitly hashes its service lockfile; the launcher also supplies a per-service
+lockfile digest because the graph lock does not resolve external dependencies. Missing submodules are omitted; an
+explicit selection of an uninitialized service reports an error. Re-run setup
+after adding repositories.
+
+```bash
+npm run dev                         # frontend and API
+run frontend:staging api             # environment choice applies to frontend only
+npm run dev -- rss documentation     # additional service and docs preview
+npm run build                       # initialized packages that provide builds
+npm run check                       # lint, types, formatting, docs validation
+npm run test -- frontend taxes       # unit test tasks for selected services
+npm run format                      # write formatting changes; never cached
+npm run turbo -- run lint --filter=opencollective-api
+npm run turbo -- run build:finalize --filter=opencollective-frontend --dry=json
+```
+
+Tasks execute concurrently according to their prerequisites. The frontend Next.js
+build precedes its server copy, which precedes Cloudflare IP refresh. Compilation
+artifacts are cached; Cloudflare refresh always runs after restoration. Development,
+watch tasks, schema refresh, database changes, API database tests, and E2E execution
+are uncached. Service processes retain their existing reload tools. Interactive
+`run` sessions show Turbo's terminal UI; noninteractive sessions stream logs.
+Ctrl-C stops the session. PM2 and `run --background` have been removed.
+
+`./scripts/test.sh [--watch] <service/test-file>...` forwards file arguments to the
+selected runner through Turbo. `./scripts/update-gql.sh [service...]` refreshes
+API/frontend/PDF schemas against the running API. REST/images copy frontend
+schemas when available and otherwise fetch their published schemas. When frontend
+is selected, copying waits for its refresh and code generation.
+
+### Working on the taxes library
+
+Consumers use their installed published taxes package by default. For local work:
+
+```bash
+npm run taxes:link                   # optional explicit linking
+npm run dev:local
+npm run build:local -- api frontend pdf
+npm run type:check -- api --local-taxes
+npm run taxes:unlink
+```
+
+Local tasks build taxes before linking it into initialized API/frontend/PDF
+consumers. Links preserve published installations in each consumer's `.turbo`
+directory; unlink restores them without modifying manifests or lockfiles. Local
+consumer tasks bypass caching to avoid mixing published and linked dependencies.
+Links persist until unlinking; the launcher rejects ordinary build/test/type/dev
+commands while linked. Use the local task entrypoints while links are active.
+Do not run standalone cached Turbo commands against linked dependencies.
+
+### Standalone repositories and CI
+
+Inside a service, use `npm run turbo -- run <task>` or the existing `npm run build`
+entrypoint. `turbo.json` contains workspace overrides; `turbo.standalone.json`
+contains the corresponding standalone graph. Update both when changing tasks.
+Independent `npm ci` installs and Heroku builds remain supported.
+
+Frontend and API CI use Vercel Remote Cache on trusted main pushes. Configure
+`TURBO_TOKEN` as a GitHub Actions secret and `TURBO_TEAM` as an Actions variable
+containing the Vercel team slug. PRs and runs without credentials use local caching.
+Dependency downloads, E2E build artifact uploads, coverage reporting, and service
+readiness/cleanup remain separate from task-result caching.
+
+Adopt service changes before the root workflow: taxes/RSS/documentation and
+images/PDF/REST first, then API/frontend together. Their E2E stack checkouts must
+contain the companion Turbo changes. Commit service changes from their individual
+feature worktrees, then update workspace submodule pointers explicitly if desired.
+Git-based `--affected` filtering at the parent cannot reliably detect independent
+submodule edits; use package filters and task caching there.
+
+See [Turbo CI](https://turborepo.dev/docs/crafting-your-repository/constructing-ci)
+and [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).

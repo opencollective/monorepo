@@ -1,0 +1,40 @@
+{
+  "name": "opencollective-workspace",
+  "private": true,
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
+  "workspaces": [
+    "opencollective-api",
+    "opencollective-frontend",
+    "opencollective-pdf",
+    "opencollective-rest",
+    "opencollective-images",
+    "opencollective-taxes",
+    "opencollective-rss",
+    "opencollective-documentation"
+  ],
+  "scripts": {
+    "dev": "node scripts/turbo.mjs dev",
+    "build": "node scripts/turbo.mjs build",
+    "lint": "node scripts/turbo.mjs lint",
+    "type:check": "node scripts/turbo.mjs type:check",
+    "format:check": "node scripts/turbo.mjs format:check",
+    "format": "node scripts/turbo.mjs format",
+    "test": "node scripts/turbo.mjs test",
+    "test:watch": "node scripts/turbo.mjs test:watch",
+    "check": "node scripts/turbo.mjs run lint type:check format:check validate",
+    "test:tooling": "node --test scripts/*.test.mjs .vm/*.test.mjs",
+    "graphql:update": "node scripts/turbo.mjs graphql:update",
+    "install:services": "bash scripts/install-dependencies.sh",
+    "taxes:link": "node scripts/turbo.mjs run taxes:link:packages",
+    "taxes:unlink": "node scripts/local-taxes.mjs unlink",
+    "dev:local": "node scripts/turbo.mjs dev --local-taxes",
+    "build:local": "node scripts/turbo.mjs build --local-taxes",
+    "turbo": "node scripts/turbo.mjs",
+    "install:tooling": "node scripts/turbo.mjs setup",
+    "taxes:link:packages": "node scripts/local-taxes.mjs link"
+  }
+}
