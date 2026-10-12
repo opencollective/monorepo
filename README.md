@@ -187,9 +187,17 @@ entrypoint. `turbo.json` contains workspace overrides; `turbo.standalone.json`
 contains the corresponding standalone graph. Update both when changing tasks.
 Independent `npm ci` installs and Heroku builds remain supported.
 
-Frontend and API CI use Vercel Remote Cache on trusted main pushes. Configure
-`TURBO_TOKEN` as a GitHub Actions secret and `TURBO_TEAM` as an Actions variable
-containing the Vercel team slug. PRs and runs without credentials use local caching.
+Frontend and API CI use Vercel Remote Cache through GitHub OIDC on trusted main
+pushes. Keep the existing `TURBO_TEAM` Actions variable. Create Vercel Turborepo
+CLI OIDC policies for the API and frontend repositories, restricted to `main`,
+in team Settings → Build and Deployment → OIDC Policies for CLI Access. Policies
+must cover their CI and E2E workflows, including frontend's reusable E2E
+preparation workflow. Use the default audience.
+
+Jobs grant `id-token: write`; Vercel's setup action exports a short-lived cache
+token before Turbo runs and revokes it afterward. No `TURBO_TOKEN` repository
+secret is required. PRs and runs without `TURBO_TEAM` use local caching.
+
 Dependency downloads, E2E build artifact uploads, coverage reporting, and service
 readiness/cleanup remain separate from task-result caching.
 
@@ -201,4 +209,4 @@ Git-based `--affected` filtering at the parent cannot reliably detect independen
 submodule edits; use package filters and task caching there.
 
 See [Turbo CI](https://turborepo.dev/docs/crafting-your-repository/constructing-ci)
-and [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
+and [Vercel OIDC setup](https://vercel.com/docs/monorepos/remote-caching/external-ci-cd#create-an-oidc-policy).
