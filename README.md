@@ -195,12 +195,15 @@ For advanced standalone Turbo options, use internal task names, for example
 contains the corresponding standalone graph. Update both when changing tasks.
 Independent `npm ci` installs and Heroku builds remain supported.
 
-Frontend and API CI use Vercel Remote Cache through GitHub OIDC on repository
-branch pushes and PRs whose head repository matches the workflow repository.
-Keep the existing `TURBO_TEAM` Actions variable. In team Settings → Build and
+All service CI workflows, including documentation link validation, use Vercel
+Remote Cache through GitHub OIDC on repository branch pushes and PRs whose head
+repository matches the workflow repository.
+Keep the existing organization-level `TURBO_TEAM` Actions variable available to
+each repository. In team Settings → Build and
 Deployment → OIDC Policies for CLI Access, configure Turborepo CLI policies
-restricted to each API/frontend repository and its CI/E2E workflows, including
-frontend's reusable E2E preparation workflow. Allow branch pushes and
+restricted to each service repository and `.github/workflows/ci.yml`. API and
+frontend policies also cover their E2E workflows, including frontend's reusable
+E2E preparation workflow. Allow branch pushes and
 pull-request claims; remove any main-only branch restriction. API E2E runs on
 branch pushes. Use the default audience and update existing policies instead of
 adding overlapping ones.
