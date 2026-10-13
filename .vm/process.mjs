@@ -26,14 +26,6 @@ export function command(
   return result;
 }
 
-// SSH joins remote arguments into shell text. Quoting each argument here prevents
-// expansion on the guest while preserving spaces and literal apostrophes.
-export function shellQuote(value) {
-  return /^[a-zA-Z0-9_@%+=:,./-]+$/.test(value)
-    ? value
-    : `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 export function isMain(url) {
   return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(url);
 }

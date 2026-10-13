@@ -48,51 +48,6 @@ export function createGuest({
   const execute = (args, options = {}) =>
     run(args, { cwd: root, env, ...options });
 
-  function configureGit(protocol) {
-    if (!["ssh", "https"].includes(protocol))
-      throw new Error("git_protocol must be ssh or https");
-    // Only guest-global configuration is written; shared remotes stay intact.
-    for (const base of ["https://github.com/", "git@github.com:"]) {
-      const result = execute(
-        ["git", "config", "--global", "--unset-all", `url.${base}.insteadOf`],
-        { check: false },
-      );
-      if (result.status !== 0 && result.status !== 5)
-        throw new Error("Could not update guest Git URL configuration");
-    }
-    if (protocol === "https") {
-      for (const prefix of ["git@github.com:", "ssh://git@github.com/"])
-        execute([
-          "git",
-          "config",
-          "--global",
-          "--add",
-          "url.https://github.com/.insteadOf",
-          prefix,
-        ]);
-    } else {
-      execute([
-        "git",
-        "config",
-        "--global",
-        "--add",
-        "url.git@github.com:.insteadOf",
-        "https://github.com/",
-      ]);
-    }
-    // Resolve gh from PATH at credential-request time, including Orca sessions.
-    const helper = "credential.https://github.com.helper";
-    execute(["git", "config", "--global", "--replace-all", helper, ""]);
-    execute([
-      "git",
-      "config",
-      "--global",
-      "--add",
-      helper,
-      "!gh auth git-credential",
-    ]);
-  }
-
   async function stack() {
     // Use the shared monorepo's npm and Compose workflows.
     const required = ["api", "frontend", "rest", "pdf", "images", "taxes"];
@@ -239,16 +194,14 @@ export function createGuest({
     );
   }
 
-  return { configureGit, stack, doctor };
+  return { stack, doctor };
 }
 
 if (isMain(import.meta.url))
   await main(() => {
     const [action, ...args] = process.argv.slice(2);
     const guest = createGuest();
-    if (action === "configure-git" && args.length === 1)
-      return guest.configureGit(args[0]);
     if (["stack", "doctor"].includes(action) && !args.length)
       return guest[action]();
-    throw new Error("Usage: guest.mjs configure-git <ssh|https>|stack|doctor");
+    throw new Error("Usage: guest.mjs stack|doctor");
   });
