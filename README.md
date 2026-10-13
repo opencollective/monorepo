@@ -21,9 +21,11 @@ To take full advantage of these benefits, it is recommended that you go through 
 ## Getting Started
 
 For a persistent development microVM with SSH/editor access, follow
-[the microsandbox guide](.vm/README.md). Run `./scripts/vm.sh setup` after
-installing microsandbox and enabling KVM access. It mounts the host checkout at
-`/workspace` and installs the toolchain and Docker inside the sandbox. Use native
+[the microsandbox guide](.vm/README.md). Run `./.vm/setup.sh` from the primary
+checkout after installing microsandbox and enabling KVM access. The
+`.vm/opencollective-msb.yaml` config defaults to 8 CPUs and 32 GiB RAM. Setup mounts
+the host checkout at `/workspace` and installs the toolchain and Docker inside the
+sandbox. Configure SSH editor access and external worktree mounts manually. Use native
 `msb` commands for administration. The DevContainer workflow below remains available.
 
 ### Prerequisites

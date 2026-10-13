@@ -84,7 +84,7 @@ done
 sudo -iu ubuntu npm cache clean --force
 rm -rf /home/ubuntu/.nvm/.cache
 
-# Source the invoking checkout's hooks even when setup runs from a worktree.
+# Source the shared primary checkout's shell hooks.
 printf -v source_line 'source %q' "$SCRIPT_DIR/user-shell.sh"
 for shell_file in /home/ubuntu/.bashrc /home/ubuntu/.profile; do
   touch "$shell_file"

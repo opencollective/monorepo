@@ -8,71 +8,103 @@ same files on the host.
 
 ## Setup
 
-Use a Linux host with KVM, microsandbox **v0.7.8 or newer**, Node.js 20+, Git, Bash,
-and OpenSSH. Install the CLI using the
+Use a Linux host with KVM, microsandbox **v0.7.8 or newer**, Git, Bash, and jq.
+OpenSSH is optional for editors and SFTP; Node.js is installed inside the guest.
+Install the CLI using the
 [official installation instructions](https://docs.microsandbox.dev/getting-started/quickstart).
 Your regular user needs read/write access to `/dev/kvm`. Run setup without `sudo`.
 
-From a monorepo checkout containing the API, frontend, REST, PDF, images, and taxes:
+Use the **primary monorepo checkout**, containing the API, frontend, REST, PDF,
+images, and taxes:
 
 ```bash
 MSB_BACKEND=local msb doctor
-./scripts/vm.sh setup
+./.vm/setup.sh
 ```
 
-Setup creates `oc-dev` from upstream's Ubuntu 24.04 systemd image, installs tools
-inside it, authorizes an SSH key, installs the SSH alias, and initializes the
-existing PostgreSQL, Mailpit, and RustFS Compose stack. It installs project
-packages and prepares development and test databases. No host Docker is needed.
-Missing service repositories must be prepared on the host before setup.
+Setup creates `oc-dev` using [opencollective-msb.yaml](opencollective-msb.yaml),
+installs tools inside it, and initializes the existing PostgreSQL, Mailpit, and
+RustFS Compose stack. It installs project packages and prepares development and
+test databases. No host Docker or Node.js is needed. Prepare missing service
+repositories on the host before setup. `./scripts/vm.sh setup` remains a
+compatibility entry point.
 
-When invoked from a monorepo worktree, setup selects and prints the **primary
-checkout** for `/workspace`. Monorepo worktrees under that checkout's
-`.worktrees` directory remain accessible there. Git metadata and existing external worktrees are
-also shared at their original absolute paths when necessary; setup never rewrites
-Git metadata. A mount that would hide checkout files is rejected. Keep host paths
-stable, and rerun setup after adding external service worktrees; it reports mount
-changes rather than silently replacing an existing sandbox.
-
-Setup uses the invoking checkout's provisioning scripts, including when they are
-in a worktree. Keep that checkout available for later tool refreshes and shell
-hooks.
+The script resolves its checkout independently of your current directory and
+rejects setup scripts in monorepo worktrees. It shares the primary checkout at
+`/workspace` and its original absolute path, keeping nested worktree Git backlinks
+valid without rewriting Git metadata. A mount that would hide checkout files is
+rejected. Keep host paths stable. External worktrees and Git metadata outside this
+checkout need manual mounts; see below.
 
 Rerunning setup refreshes tools and preserves existing `.env` values and databases.
 If a stage fails, its sandbox is retained so you can inspect it, fix the cause, and
-rerun setup. Existing sandboxes are checked for workspace ownership, resources,
-mounts, runtime, and published ports before provisioning.
+rerun setup. Existing sandboxes are checked for workspace ownership, required
+writable mounts, the owned Docker disk, guest runtime, and pending configuration
+changes before provisioning. Their saved resources, ports, and extra mounts are
+retained. Paused or transitional sandboxes must be resolved with native commands
+before setup.
 
 ## Environment overrides
 
-There are no project settings files. Set overrides when running setup:
+The YAML contains the image, CPU/RAM defaults, init, user, working directory,
+workspace mount, networking, and published ports. It is loaded explicitly with
+`msb create --conf`; Microsandbox does not discover config files automatically.
+Set overrides when running setup:
 
 ```bash
-OC_VM_CPUS=4 OC_VM_MEMORY_MB=16384 OC_VM_DISK_GB=50 ./scripts/vm.sh setup
+OC_VM_CPUS=4 OC_VM_MEMORY_MB=16384 OC_VM_DISK_GB=50 ./.vm/setup.sh
 ```
 
-| Variable              | Default                                        | Purpose                     |
-| --------------------- | ---------------------------------------------- | --------------------------- |
-| `OC_VM_CPUS`          | `8`                                            | Virtual CPUs                |
-| `OC_VM_MEMORY_MB`     | `43008`                                        | RAM in MiB (42 GiB)         |
-| `OC_VM_DISK_GB`       | `100`                                          | Docker data disk in GiB     |
-| `OC_VM_INSTANCE_NAME` | `oc-dev`                                       | Sandbox and SSH alias       |
-| `OC_VM_IMAGE`         | `ghcr.io/superradcompany/ubuntu-systemd:24.04` | Ubuntu image with systemd   |
-| `OC_VM_SSH_KEY`       | `~/.ssh/oc-dev_ed25519.pub`                    | Public key with private key |
+| Variable              | Default                                        | Purpose                   |
+| --------------------- | ---------------------------------------------- | ------------------------- |
+| `OC_VM_CPUS`          | `8`                                            | Virtual CPUs              |
+| `OC_VM_MEMORY_MB`     | `32768`                                        | RAM in MiB (32 GiB)       |
+| `OC_VM_DISK_GB`       | `100`                                          | Docker data disk in GiB   |
+| `OC_VM_INSTANCE_NAME` | `oc-dev`                                       | Sandbox name              |
+| `OC_VM_IMAGE`         | `ghcr.io/superradcompany/ubuntu-systemd:24.04` | Ubuntu image with systemd |
+
+The script supplies `OC_VM_WORKSPACE` (its primary checkout's absolute path) and
+the default disk size for the YAML's `${NAME}` substitutions. YAML does not
+support `${NAME:-fallback}` or numeric CPU interpolation. CPU, memory, and image
+overrides therefore use native CLI flags. The sandbox name, original-path mount,
+and owned Docker disk are supplied by the script; msb v0.7.8 cannot declare owned
+disks in sandbox YAML.
 
 `OC_VM_DISK_GB` also sets the additional guest-write allowance for each shared
 host directory. It does not reserve that space on the host.
 
-These settings apply at creation. Supply matching values on setup reruns.
-Use native `msb modify` for supported resource changes and then use corresponding
-environment values on subsequent setup runs. For mount/image/port changes, use a
+These settings apply at creation. Rerunning setup reuses the saved configuration;
+it does not resize an existing VM, including one created with the former 42 GiB
+RAM default. Use native `msb modify oc-dev --memory 32G` to change its memory.
+For mount/image/port changes, use a
 different sandbox name or explicitly remove the old sandbox after saving guest data.
 The setup helper never replaces a sandbox automatically.
 
 The helper selects `MSB_BACKEND=local` and verifies the effective backend;
 managed policies can override that selection. `MSB_HOME` and `MSB_CONFIG_PATH`
-are honored and recorded in the SSH ProxyCommand. Keep the same values for native
-administration commands. Setup does not modify microsandbox's global configuration.
+are honored. Keep the same values for native administration commands and manual
+SSH configuration; absolute paths are recommended. Setup does not modify
+microsandbox's global configuration.
+
+## External worktrees
+
+Setup does not discover or add external mounts. Before creating a sandbox, use
+`git worktree list --porcelain` and
+`git rev-parse --path-format=absolute --git-common-dir` in each relevant repository
+to identify paths outside the shared checkout. For each such path, add a bind to
+the YAML using the same absolute host and guest paths:
+
+```yaml
+mounts:
+  - "${OC_VM_WORKSPACE}:/workspace:uid=1000,gid=1000,quota=${OC_VM_DISK_GB}G"
+  - "/absolute/external/worktree:/absolute/external/worktree:uid=1000,gid=1000,quota=${OC_VM_DISK_GB}G"
+```
+
+Retain the existing workspace mount. This also covers external common Git
+directories or submodule worktrees whose metadata points outside the checkout.
+Rerunning setup keeps additional mounts already saved in an existing sandbox.
+Editing YAML does not add mounts to an existing sandbox; use a new name or save
+guest data before explicitly removing and recreating it.
 
 ## Storage and services
 
@@ -95,22 +127,63 @@ Use `df -h / /var/lib/docker` and `msb inspect` to check storage usage.
 
 ## SSH and editors
 
+For a terminal, use native SSH without authorizing a key or configuring OpenSSH:
+
+```bash
+MSB_BACKEND=local msb ssh oc-dev --no-inactivity-timeout
+```
+
+For editors, OpenSSH, or SFTP, authorize a public key manually. Existing keys and
+SSH entries from the previous setup still work; setup no longer writes them.
+For a dedicated key, create it only if you do not already have the pair:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/oc-dev_ed25519 -C oc-microsandbox
+```
+
+Authorize its public key (or substitute another `.pub` path):
+
+```bash
+OC_VM_SSH_KEY="$HOME/.ssh/oc-dev_ed25519.pub"
+MSB_BACKEND=local msb ssh authorize --file "$OC_VM_SSH_KEY"
+```
+
+`OC_VM_SSH_KEY` is a convenience for this manual command, not a setup override.
+Add this entry to `~/.ssh/config`, adjusting the sandbox name and `IdentityFile`
+when needed:
+
+```sshconfig
+Host oc-dev
+  HostName microsandbox
+  User ubuntu
+  IdentityFile ~/.ssh/oc-dev_ed25519
+  IdentitiesOnly yes
+  ForwardAgent no
+  ForwardX11 no
+  StrictHostKeyChecking accept-new
+  HostKeyAlias oc-dev-microsandbox
+  UserKnownHostsFile ~/.ssh/oc-microsandbox-known_hosts
+  ProxyCommand env MSB_BACKEND=local msb ssh serve oc-dev --stdio --no-inactivity-timeout
+  ServerAliveInterval 30
+  ServerAliveCountMax 3
+```
+
+For custom `MSB_HOME` or `MSB_CONFIG_PATH`, add the corresponding absolute-path
+assignments after `env` in the ProxyCommand. The editor must be able to find `msb`
+on its host PATH; use its absolute executable path if necessary. Never copy a
+private key into the guest.
+
 ```bash
 ssh oc-dev
 ssh oc-dev node --version
 sftp oc-dev
 ```
 
-Setup creates or reuses the dedicated default key outside the checkout. For an
-existing key pair, set `OC_VM_SSH_KEY` to its `.pub` file; setup expects the private
-key beside it. It never copies private keys into the guest.
-
 [microsandbox SSH](https://docs.microsandbox.dev/sandboxes/ssh) serves OpenSSH through
 `ProxyCommand msb ssh serve oc-dev --stdio`, using `msb ssh authorize` for public
 key authorization. There is no guest SSH daemon or persistent host SSH listener.
-Authorization is shared across the selected `MSB_HOME`. The launcher updates only
-`~/.ssh/oc-development.conf` and its Include in `~/.ssh/config`, preserving other
-entries. Host keys use a separate microsandbox known-hosts file. Recreating a
+Authorization is shared across the selected `MSB_HOME`. Host keys use the separate
+microsandbox known-hosts file configured above. Recreating a
 sandbox may require removing its old entry with:
 
 ```bash
@@ -181,8 +254,7 @@ msb logs oc-dev
 msb exec --user ubuntu oc-dev -- bash
 ```
 
-To refresh just the toolchain, use the provisioning script from the checkout that
-ran setup (adjust its `/workspace` path if it is a monorepo worktree):
+To refresh just the toolchain, use the primary checkout's provisioning script:
 
 ```bash
 msb exec --user root oc-dev -- bash /workspace/.vm/provision.sh
@@ -199,10 +271,14 @@ microsandbox authorized key list in place for reuse.
 
 ## Migration and validation
 
-This setup creates a fresh microsandbox; it does not stop, delete, or import data
-from an existing Incus VM. Shared source and `.env` files are reused, while guest
-home files, authentication, and databases start fresh. Keep the old VM available
-for any manual data recovery.
+Existing compatible microsandboxes are reused without changing their resources
+or deleting guest data. Setup no longer installs SSH aliases or discovers external
+worktrees. Keep existing SSH entries, or follow the manual instructions above.
+
+This setup does not stop, delete, or import data from an existing Incus VM. A new
+microsandbox reuses shared source and `.env` files, while guest home files,
+authentication, and databases start fresh. Keep the old VM available for manual
+data recovery.
 
 ```bash
 node --test scripts/init.test.mjs scripts/vm.test.mjs .vm/*.test.mjs

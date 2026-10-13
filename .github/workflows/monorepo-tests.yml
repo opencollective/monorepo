@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  # These checks use temporary Git/SSH fixtures; no KVM host, VM boot, private
+  # These checks use temporary files and a fake msb; no KVM host, VM boot, private
   # repository access, or model-provider credentials are needed in CI.
   init-tests:
     name: Monorepo initialization tests
@@ -51,3 +51,6 @@ jobs:
 
       - name: Check shell scripts
         run: shellcheck -S warning .vm/*.sh scripts/vm.sh scripts/start-dependencies.sh .devcontainer/shell-aliases.sh
+
+      - name: Check VM configuration and documentation formatting
+        run: npx --yes prettier@3.9.9 --check .vm/*.mjs .vm/*.json .vm/*.yaml .vm/README.md README.md .github/workflows/monorepo-tests.yml

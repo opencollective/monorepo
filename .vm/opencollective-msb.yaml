@@ -1,0 +1,27 @@
+# Loaded explicitly by setup.sh. Environment references have no YAML defaults.
+image: "ghcr.io/superradcompany/ubuntu-systemd:24.04"
+cpus: 8
+memory: "32768M"
+init:
+  cmd: "/lib/systemd/systemd"
+user: "ubuntu"
+workdir: "/workspace"
+shell: "/bin/bash"
+security: default
+labels:
+  opencollective.workspace: "${OC_VM_WORKSPACE}"
+  opencollective.setup: "microsandbox-v1"
+mounts:
+  - "${OC_VM_WORKSPACE}:/workspace:uid=1000,gid=1000,quota=${OC_VM_DISK_GB}G"
+network:
+  policy: public
+  ports:
+    - "127.0.0.1:3000:3000"
+    - "127.0.0.1:3001:3001"
+    - "127.0.0.1:3002:3002"
+    - "127.0.0.1:3003:3003"
+    - "127.0.0.1:3060:3060"
+    - "127.0.0.1:1080:1080"
+    - "127.0.0.1:9000:9000"
+    - "127.0.0.1:9001:9001"
+    - "127.0.0.1:5432:5432"
