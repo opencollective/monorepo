@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Issue review · Open Collective</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <p class="eyebrow">OPEN COLLECTIVE · ISSUE TRIAGE</p>
+      <h1 id="title">Review proposals</h1>
+      <p>
+        Approve the proposal, skip it, or give instructions for a revision.
+        Every decision is saved immediately.
+      </p>
+      <p class="hint">
+        Approval queues the exact changes for the agent to apply to GitHub.
+        Instructions require a revised proposal.
+      </p>
+      <div class="toolbar">
+        <label
+          >Show
+          <select id="filter">
+            <option value="all">All issues</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="instructions">Needs revision</option>
+            <option value="skipped">Skipped</option>
+            <option value="applied">Applied</option>
+          </select></label
+        >
+        <span id="progress"></span>
+        <span id="save" role="status" aria-live="polite">Loading…</span>
+      </div>
+      <p id="error" role="alert" hidden></p>
+    </header>
+    <main id="issues"></main>
+    <template id="card">
+      <article>
+        <div class="card-top">
+          <a class="issue-link" target="_blank" rel="noopener noreferrer"></a
+          ><span class="badge"></span>
+        </div>
+        <p class="finding"></p>
+        <ul class="evidence"></ul>
+        <details class="source">
+          <summary>Original issue and discussion</summary>
+          <pre class="source-body"></pre>
+          <div class="source-comments"></div>
+        </details>
+        <table>
+          <tbody></tbody>
+        </table>
+        <section class="comment">
+          <div class="comment-title">
+            <strong>Proposed comment</strong
+            ><button class="toggle-comment secondary" type="button">
+              Remove comment
+            </button>
+          </div>
+          <pre></pre>
+        </section>
+        <p class="limits hint"></p>
+        <p class="outcome hint"></p>
+        <div class="actions">
+          <button class="approve" type="button">Approve</button
+          ><button class="skip secondary" type="button">Skip</button
+          ><button class="instructions-button secondary" type="button">
+            Add instructions
+          </button>
+        </div>
+        <div class="instructions" hidden>
+          <label
+            >Instructions for the agent<textarea
+              rows="3"
+              placeholder="What should change in this proposal?"
+            ></textarea>
+          </label>
+          <p class="hint">
+            Saved as you type. The agent will revise this proposal before you
+            approve it.
+          </p>
+        </div>
+      </article>
+    </template>
+  </body>
+</html>

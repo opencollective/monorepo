@@ -18,6 +18,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 }
 
 # Include native build dependencies and headless-browser libraries used by tests.
+sudo -iu ubuntu test -w /workspace
+
+# Configure VM SSH access before the host connects.
+bash /workspace/.vm/configure-ssh.sh
+
+# Raise the task limits. The image ships kernel.pid_max=8192, and systemd derives
+# DefaultTasksMax (15%) from it, so services and sessions get pids.max=1228. Agent
+# sessions, the dev stack and parallel Playwright workers exhaust that and crash
+# with "Target crashed". Both settings take effect after the VM restarts.
+install -d -m 755 /etc/sysctl.d /etc/systemd/system.conf.d
+printf 'kernel.pid_max = 4194304\n' > /etc/sysctl.d/60-oc-pid-max.conf
+printf '[Manager]\nDefaultTasksMax=65536\n' > /etc/systemd/system.conf.d/60-oc-tasks-max.conf
+sysctl -q -p /etc/sysctl.d/60-oc-pid-max.conf
+systemctl daemon-reexec
+
+# Include native build dependencies and headless-browser libraries used by the
+# existing development/test workflow, plus tools for root-disk growth below.
+
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg git openssh-client sudo \

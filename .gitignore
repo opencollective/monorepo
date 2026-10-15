@@ -7,11 +7,15 @@ opencode.json
 .worktrees
 docs
 
+# Issues triage skill
+.oc-triage
+
 # Skills are specific to each developer
-.agents/skills
+.agents/skills/*
 skills-lock.json
 
 # ...except for a few that we want to share:
+!.agents/skills/oc-triage
 !.agents/skills/documentation-feature-pr
 !.agents/skills/i18n-frontend-translate
 !.agents/skills/search-i18n-translations
