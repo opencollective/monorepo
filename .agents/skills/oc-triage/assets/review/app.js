@@ -107,6 +107,9 @@ function render() {
     const anchor = article.querySelector(".issue-link");
     anchor.textContent = `#${issue.number} · ${issue.title}`;
     safeLink(anchor, issue.url);
+    article.querySelector(".summary-text").textContent =
+      issue.summary ||
+      "Summary not yet provided. Expand the original issue below for context.";
     article.querySelector(".finding").textContent = issue.finding;
     article.querySelector(".source-body").textContent = issue.snapshot.body;
     for (const comment of issue.snapshot.comments) {
@@ -170,7 +173,59 @@ function render() {
       th.scope = "row";
       th.textContent = key;
       const td = document.createElement("td");
-      td.textContent = value;
+      const tone =
+        key === "Status"
+          ? {
+              "keep-open": "open",
+              completed: "success",
+              "not-planned": "warning",
+              duplicate: "duplicate",
+            }[p.status]
+          : key === "Add labels" || key === "Create labels"
+            ? "success"
+            : key === "Remove labels"
+              ? "danger"
+              : key === "Reviewed"
+                ? p.reviewed
+                  ? "success"
+                  : "warning"
+                : "neutral";
+      const icon =
+        key === "Status"
+          ? {
+              "keep-open": "○",
+              completed: "✓",
+              "not-planned": "⊘",
+              duplicate: "↗",
+            }[p.status]
+          : {
+              Type: "◆",
+              "Add labels": "+",
+              "Remove labels": "−",
+              "Preserve labels": "=",
+              "Create labels": "✦",
+              Reviewed: p.reviewed ? "✓" : "○",
+            }[key];
+      tr.className = key === "Status" ? "status-row" : "";
+      const values =
+        key === "Add labels"
+          ? p.addLabels
+          : key === "Remove labels"
+            ? p.removeLabels
+            : key === "Preserve labels"
+              ? issue.snapshot.labels.filter(
+                  (label) => !p.removeLabels.includes(label),
+                )
+              : [value];
+      for (const text of values.length ? values : ["None"]) {
+        const badge = document.createElement("span");
+        badge.className = `value-badge tone-${text === "None" ? "neutral" : tone}`;
+        const symbol = document.createElement("span");
+        symbol.setAttribute("aria-hidden", "true");
+        symbol.textContent = text === "None" ? "—" : icon;
+        badge.append(symbol, document.createTextNode(` ${text}`));
+        td.append(badge);
+      }
       tr.append(th, td);
       article.querySelector("tbody").append(tr);
     }

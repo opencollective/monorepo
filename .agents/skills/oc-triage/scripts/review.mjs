@@ -226,6 +226,7 @@ export function revise(file, number, revision, replacement) {
     for (const key of [
       "title",
       "url",
+      "summary",
       "finding",
       "evidence",
       "limits",

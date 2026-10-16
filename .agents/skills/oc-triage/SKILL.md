@@ -47,6 +47,7 @@ The parent checks every report for adequate evidence and resolves contradictory 
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Resolved                  | Comment with evidence and links to fixing PRs/issues; close as completed when the evidence covers the reported problem.                                   |
 | Obsolete                  | Explain why the request no longer applies, link deprecation or replacement decisions, and close as not planned.                                           |
+| Declined by operator      | Close as not planned when the operator explicitly decides against pursuing the request. Explain that disposition if a comment is approved; it does not imply implementation or obsolescence. |
 | Duplicate                 | Link the canonical issue and explain the overlap; close as a duplicate using supported `gh` functionality.                                                |
 | Valid, lacks context      | Keep open; add useful related issues, code paths, evidence, reproduction gaps, or investigation steps without claiming unverified behavior.               |
 | Partially resolved        | Keep open; explain the resolved portion and remaining problem with supporting references.                                                                 |
@@ -54,7 +55,7 @@ The parent checks every report for adequate evidence and resolves contradictory 
 | Valid, already actionable | Keep open; skip the comment and status change. Still propose classification and the completion marker.                                                    |
 | Inconclusive              | Explain uncertainty to the operator; keep open and leave unmarked for a future investigation. Propose useful classification/context changes if supported. |
 
-Propose a comment only when it adds information useful to the discussion: new evidence, a relevant reference, a concrete unresolved question, or a decision that needs explanation. When the issue already contains the context, propose **Comment: none** and make only useful classification updates. Confirming that a feature remains unimplemented or restating known implementation concerns is insufficient on its own.
+Propose a comment only when it adds information useful to the discussion: new evidence, a relevant reference, a concrete unresolved question, or a decision that needs explanation. Check the issue timeline, including cross-referenced PRs and linked development work, as well as the body and comments before deciding a reference is new. Treat a PR already visible there as existing context; mention it again only to explain a material finding beyond its existence or open/unmerged status. When the issue already contains the context, propose **Comment: none** and make only useful classification updates. Confirming that a feature remains unimplemented or restating known implementation concerns is insufficient on its own.
 
 Keep GitHub comments short and straight to the point: usually one short paragraph stating the finding or decision, with only the evidence links or remaining work needed to understand it. Omit agent-assistance and operator-review attribution. Avoid repeating the issue, procedural narration, and promises to implement fixes. Use immutable source links where useful; include related references only when they explain the conclusion or remaining work.
 
@@ -74,7 +75,11 @@ Use `security` for issues whose subject concerns the security or threat model, s
 
 Distinguish community feedback from internally adopted product work. Propose `community request` for user/community suggestions retained to document a real need when product fit or strategic adoption has not been established. User authorship alone does not justify this treatment: community-reported bugs and adopted enhancements can be actionable product work. Keep these requests open unless separate evidence supports closure; the label records feedback, not a roadmap commitment or a decision that the request will never be implemented. Product alignment is a decision for the operator, not something to infer from missing specifications. Keep service/topic/type classification, and avoid suggesting implementation-readiness or priority labels solely because the request is understandable. Check the live taxonomy and preview creation if this label does not exist.
 
+Assess adoption for the remaining request: delivery or prioritization of an MVP does not establish adoption of its broader goals. Historical encouragement, feasibility discussion, or willingness to accept contributions alone is insufficient to establish current product adoption.
+
 Use context/workflow labels when supported, including `to reproduce`, `need steps`, `needs specs`, `needs data`, `needs design`, `not ready for implementation`, `straightforward`, `duplicate`, `wontfix`, and `blocked → waiting feedback/parent/third party`. Remove obsolete context labels only with evidence.
+
+Before proposing `needs design`, inspect design references throughout the issue and discussion and identify the specific unresolved design decision. Distinguish inaccessible or old links from missing design; report access limits without treating them alone as evidence that new design is needed. Incorporate the operator's confirmation that an existing design is sufficient.
 
 Propose `low hanging fruit` for actionable issues whose remaining work is well understood, simple, and has no identified material risk. Require clear requirements, a bounded implementation, and straightforward verification; a low complexity estimate alone is insufficient. Include the label in the operator's approval preview, checking its existence in the live taxonomy.
 
@@ -94,8 +99,8 @@ Do not invent labels silently. Include any necessary label creation in the appro
 
 Before **any GitHub write**, present a complete review card in chat or on the batch page:
 
-- Start with a linked issue number/title and a prominent recommendation, followed by a short finding with useful evidence links.
-- Use a compact table for status/close reason/canonical duplicate, native type, label additions, label removals, and whether `reviewed` will be added. Distinguish preserved values from changes. Include any label creation.
+- Start with a linked issue number/title, then a TL;DR explaining the original issue in one or two plain-language sentences. Follow with the prominent decision and reasoning, including useful evidence links.
+- Use icons and text badges to make outcomes prominent in the compact table for status/close reason/canonical duplicate, native type, label additions, label removals, and whether `reviewed` will be added. Distinguish preserved values from changes. Include any label creation.
 - Put the exact proposed comment in a blockquote, or explicitly say **Comment: none**. State material uncertainty or reproduction limits briefly.
 - In chat, end with a clear choice to approve, request changes, or skip; show one issue at a time. On the batch page, each issue has Approve, Skip, Add instructions, and a one-click comment-removal control.
 
@@ -115,6 +120,10 @@ On failure, stop that issue's remaining writes and report what succeeded, failed
 
 Report actual outcomes with issue links, including skipped, pending approval, inconclusive, and failed actions. In the default conversational loop, continue to the next issue after reporting the current outcome; a request to stop overrides this continuation. For a supplied list or finite batch, stop at its end. Preserve review-page state so the operator can resume later.
 
-## Refine the workflow with the operator
+## Self-learning after each full run
 
-During ongoing triage, incorporate explicit process preferences and reusable decision criteria into this skill as they emerge; the operator has authorized these incremental skill updates. Keep changes narrow, reconcile affected instructions, and briefly report what changed. Distinguish issue-specific dispositions from general rules: record a general rule only when the operator states it or the rationale supports reuse. Preserve evidence standards, remote-state checks, and approval boundaries. Skill edits do not authorize GitHub actions on other issues.
+After each full run, once operator feedback has been ingested and the issues have been triaged, review the feedback, corrected proposals, investigation findings, and execution problems for reusable learning. This learning pass is required before reporting the run complete; preparing the review page or waiting for approvals does not complete the run. For conversational mode, perform it when the operator ends the session.
+
+Document any new reusable learning directly in this skill without waiting for a separate request or approval. Update the relevant instructions in `SKILL.md`, or its linked reference for mode-specific mechanics, so future runs use the learning. The operator authorizes these incremental skill updates, including improvements identified during the run. Keep edits narrow, reconcile existing guidance, and avoid duplicate rules or a chronological run log. Distinguish issue-specific dispositions from general rules: record a general rule only when the operator states it or the rationale supports reuse.
+
+Briefly report what changed in the final outcome. If the learning pass finds nothing new, say so without manufacturing a change. Preserve evidence standards, remote-state checks, and approval boundaries. Skill edits do not authorize GitHub actions on other issues.

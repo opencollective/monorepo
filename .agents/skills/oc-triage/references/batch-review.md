@@ -6,6 +6,8 @@ Use this for an explicit batch request or a list of more than ten issues. The pa
 
 Create a unique directory under `/workspace/.oc-triage/<batch-name>/` for `proposals.json`, `state.json`, snapshots, and investigation reports. Keep it outside service repositories and source control. Do not use `/tmp` for review state or delete a session when the operator closes the page. Preserve this path and the launch command in the conversation so a later agent can resume it. The default server port is 4317; reuse the same directory and state file on restart. To share in a remote environment, use its supported private port forwarding to the loopback server; do not publish the page or state publicly.
 
+Reserve a new batch directory with exclusive creation before dispatching investigators or writing any artifacts. If it already exists, inspect its selection and state: resume that batch only when intended, or choose a fresh name for a new selection. Protect all existing artifacts, including reports and seed proposals, rather than relying only on `init` refusing to overwrite `state.json`.
+
 Investigate each selected issue using the main skill. Check all reports before generating proposals. Preserve the operator's supplied order, or oldest-first selection for a requested count. Prepare every issue in the selected batch, rather than silently truncating to available worker slots. Reuse investigations where still applicable. Read the live taxonomy, including native issue types, each run.
 
 Write a seed JSON object with `title` and `issues`. Each issue has this shape (this example is illustrative, not a real investigation):
@@ -15,6 +17,7 @@ Write a seed JSON object with `title` and `issues`. Each issue has this shape (t
   "number": 123,
   "url": "https://github.com/opencollective/opencollective/issues/123",
   "title": "Issue title",
+  "summary": "One or two plain-language sentences explaining the original problem or request and its impact.",
   "finding": "Recommendation and the evidence-based reason.",
   "evidence": [
     {
@@ -50,7 +53,7 @@ Write a seed JSON object with `title` and `issues`. Each issue has this shape (t
 }
 ```
 
-Snapshot `type` is the native name or null. Snapshot comments must include all bodies and stable identifiers/URLs, including minimized discussion, so material changes can be detected. Snapshot labels are names. Compare label sets without order, and compare meaningful fields rather than timestamps. Keep source data separate from proposed actions. `status` is `keep-open`, `completed`, `not-planned`, or `duplicate`; the last requires `duplicateOf`. A label creation contains `name`, `description`, and six-digit hex `color`. `reviewed` is false for inconclusive investigations. The page displays its addition separately; include it only there, not in `addLabels`. Use null for no comment. The review card shows all changes, evidence, and any limitations.
+Snapshot `type` is the native name or null. Snapshot comments must include all bodies and stable identifiers/URLs, including minimized discussion, so material changes can be detected. Snapshot labels are names. Compare label sets without order, and compare meaningful fields rather than timestamps. Keep source data separate from proposed actions. `status` is `keep-open`, `completed`, `not-planned`, or `duplicate`; the last requires `duplicateOf`. A label creation contains `name`, `description`, and six-digit hex `color`. `reviewed` is false for inconclusive investigations. The page displays its addition separately; include it only there, not in `addLabels`. Use null for no comment. The review card starts with the issue `summary` (TL;DR), followed by `finding` (decision and reasoning), then evidence and action rows with icons and colored badges. Write the summary from the issue and discussion, separately from the triage decision. Older sessions without a summary show an explicit missing-summary notice until revised. The review card shows all changes, evidence, and any limitations.
 
 Run from any directory, substituting absolute paths:
 
