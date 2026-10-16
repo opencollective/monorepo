@@ -2,6 +2,13 @@
 27-expenses	e2e flake: 27-expenses (recurring invoice/reimbursement setup)
 39-recurring-contributions	e2e flake: 39-recurring-contributions (filter popover closes)
 21-collective.create	e2e flake: 21-collective.create (tags / 404 on new collective page)
+12-contributionFlow\.donate	e2e flake: 12-contributionFlow.donate (new user, order-success timeout)
+did not transition to PAID|40-stripe-element-(sepa|ach)	e2e flake: 40-stripe-element-sepa/ach (order stays PROCESSING, webhook timing)
+29-host\.admin	e2e flake: 29-host.admin (pending contributions, "€500.00" mark-as-paid, 404 on the created collective)
+32-account-deletion	e2e flake: 32-account-deletion ("Delete this Collective" button)
+24-event\.createOrder	e2e flake: 24-event.createOrder (ticket timeout)
+11-contributionFlow\.signIn	e2e flake?: 11-contributionFlow.signIn ("Contribute as"; helper fixed by frontend #12436, a recurrence is worth a look)
+merge-accounts	unit flake: merge-accounts (unique-constraint collision or "before all" hook timeout)
 SequelizeDatabaseError: deadlock detected|40P01	unit flake: Postgres 40P01 deadlock (test DB reset vs lingering Activities insert)
 This order is already been processed	unit flake: Order.lock retry race (fixed by api #12144; rerun if it reappears)
 The operation was canceled	cancelled: superseded by a newer push or a sibling job failure
