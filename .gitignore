@@ -21,3 +21,6 @@ skills-lock.json
 !.agents/skills/search-i18n-translations
 !.agents/skills/security*
 !.agents/skills/support-ticket-reply
+
+# Use a symlink if you want to access the skills from Claude
+.claude
