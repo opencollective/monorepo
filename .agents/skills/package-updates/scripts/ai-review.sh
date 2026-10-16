@@ -7,7 +7,8 @@
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 review_json=$(mktemp "${TMPDIR:-/tmp}/package-review.XXXXXX")
 trap 'rm -f "$review_json"' EXIT
-BOTS='codex|coderabbit|seer|copilot'
+# Sentry's PR reviewer posts as `sentry` (not `seer`): missing it hid an open thread on api #12316 (2026-10-14)
+BOTS='codex|coderabbit|seer|sentry|copilot'
 strip() { perl -0pe 's/<details>.*?<summary>(.*?)<\/summary>/[$1] /gs; s/<[^>]+>//g; s/!\[[^\]]*\]\([^)]*\)//g; s/\n+/ /g; s/\s+/ /g'; }
 case "${1:-}" in
   --worktree)

@@ -128,9 +128,23 @@ bash "$SK/scripts/failures.sh" api 12194
 - Dependabot security PRs go stale fast: lockfile maintenance and other bumps often install the
   target version on main first. Compare each PR's target with main's lockfile (`jq` over
   `.packages`, nested copies included); already satisfied means close as outdated (pdf, 11 PRs on
-  2026-10-02). An alert with no PR, or none that fixes it, is traced the same way to the package that
-  pins the vulnerable copy: when we own that package, open an issue there (Hyperwatch → `ip-cidr` →
-  `ip-address` 9, hyperwatch/hyperwatch#638, all five repos).
+  2026-10-02). An alert with no PR, or none that fixes it, is traced to the package that pins the
+  vulnerable copy: `bash "$SK/scripts/alerts.sh" [repo ...]` lists each open alert, every copy in the
+  default branch's lockfile (dev or runtime, vulnerable or not), the dependents that resolve to each
+  vulnerable copy, and the range in their latest release. Then, by case:
+  - **Upgrading the dependent fixes it** (its latest release takes the patched range): find or wait
+    for that bump's PR, and name it in the report (frontend codegen 5 → 6 moves `@graphql-tools/utils`
+    to `^12.0.3`, frontend #12477).
+  - **We own the dependent:** open an issue there (Hyperwatch → `ip-cidr` → `ip-address` 9,
+    hyperwatch/hyperwatch#638, all five repos).
+  - **A third-party dependent that pins an old range and no longer gets releases** (api
+    `sequelize-temporal` pins lodash `4.17.21`; rest `omit-deep-lodash` takes `~4.17.21`): propose an npm
+    `overrides` entry when the patched version is semver-compatible (lodash 4.18), or a dismissal when our
+    calls never reach the vulnerable code. Name the call sites either way. The user chooses.
+  - **Dev-only copy, or no patched release** (sprintf-js via `argparse` 1): report it with its scope and
+    reach (a DoS in a lint or test tool); propose a dismissal only on the user's request.
+  Dismissing an alert is the user's call, like closing a PR. Dependabot alerts are disabled on
+  contributors-svg.
 - **Blocked:** `renovate/artifacts` red (lockfile regeneration failed in Renovate's sandbox, nothing
   to rerun: fix the cause on main, usually `engines.npm` drift, then tick the checkbox), an upstream
   fix is needed, main itself fails the same test, another PR must merge first, or an ecosystem gate
@@ -288,6 +302,14 @@ AI review: 2 findings, 1 fixed (date bounds), 1 dismissed (nit, constants alread
 unaddressed finding, or without its own review, is not a merge candidate yet.
 - Dependency-only bumps with no code change and no bot finding still carry their own review line,
   then `AI review: none`. When no second agent is available, say so (`AI review: unavailable`).
+  On a repo with no bot reviewer (pdf, contributors-svg, rest and images without a `@codex review`),
+  a diff limited to `package.json` and the lockfile skips the local `codex review`: it has no code to
+  read, and the release notes check is your own review. The line says `AI review: none (no code
+  change)`, and a major's own review states each breaking change against the call sites (contributors-svg
+  #139, p-queue 10). Any code change, a compat commit included, gets the local review.
+- Sentry's reviewer posts threads as `sentry`; `ai-review.sh` lists them with the other bots. A thread
+  from a reviewer it does not know is still a finding: when GitHub shows unresolved threads that the
+  script did not print, list them with a direct GraphQL query and add the login to `BOTS`.
 - After integrating findings, review the new head. Limit automated review/fix cycles to two per
   item per session; report remaining substantive findings and hold the merge. No findings does
   not prove a review ran: verify the reviewed SHA and report missing or incomplete coverage.
