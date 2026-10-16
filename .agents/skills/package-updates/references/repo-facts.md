@@ -93,17 +93,30 @@ secrets masked): images `oc-prod-image-server` / `oc-staging-image-server` (Redi
 `oc-prod-pdf` / `oc-staging-pdf-service` (Sentry 11 with tracing off: no `SENTRY_TRACES_SAMPLE_RATE`),
 api `opencollective-prod-api`, frontend `oc-prod-frontend`, rest `oc-prod-rest-api`.
 
+**Pushing to a bot PR from your account costs your approval** (api, 2026-10-12). api #12306 (nock 15 plus a
+test fix pushed from the user's account) stayed `BLOCKED` with "the base branch policy prohibits the merge"
+while green, up to date and `APPROVED` by that user. Classic protection has `require_last_push_approval: false`,
+so an org ruleset (unreadable without `admin:org`) most likely discounts approvals from the last pusher. A fix
+pushed to a bot PR therefore needs another maintainer's approval, like the user's own PRs; say so in the push
+batch item, or land the fix on main as its own PR and let the bot rebase.
+
+**Node Docker images carry no digest** (2026-10-15). Nothing builds the Dockerfiles of rest, images or
+frontend: Heroku deploys with the `heroku/nodejs` buildpack, and the devcontainer uses its own image. Digest
+PRs for `node` were noise, so renovate-config #6 sets `pinDigests: false` for `node`, and rest #800,
+images #752 and frontend #12581 dropped the `@sha256` pins (main: `FROM node:24`, frontend
+`FROM node:24.21`). A new node digest PR means a pin came back: close it, and check the preset.
+
 **CI services match production** (2026-10-09). Production runs PostgreSQL 16 and Heroku Key-Value
 Store, which is **Valkey**, not Redis (`heroku redis:info` says 9.1.1; Redis has no 9). CI uses
-`postgres:16.15` and `valkey/valkey:9.1` (`--entrypoint valkey-server`), with no digest:
+`postgres:16.15` and `valkey/valkey:9.1` (through the image entrypoint, which drops root; api #12293), with no digest:
 renovate-config caps postgres `<17` and valkey `<10` and disables digest pinning for service images,
-so a digest-only PR for them means a pin crept back. Keep a version tag: a bare `redis` follows
+so a digest-only PR for them means a pin crept back. Valkey's floating minor tag can be a release candidate: `9.2` was `9.2.0-rc1` when Renovate proposed it (api #12298, 2026-10-10); check for a `9.x.0` GA release on valkey-io/valkey before merging a minor. Keep a version tag: a bare `redis` follows
 `latest` (Codex flagged it, api #12290). The ubuntu-26.04 runner's PostgreSQL 18 `pg_restore` emits
 `SET transaction_timeout`, which 16 rejects: the restore runs api's `db_restore.sh` with
 `USE_DOCKER: true` (client tools from `postgres:16`). rest and images also set `SKIP_POSTINSTALL: 1`
 on their api `npm ci`, whose postinstall would restore with the runner's 18 tools on a cache miss
 (api and frontend skip it with `OC_ENV: ci`). Dependabot PRs get only Dependabot secrets: api,
-frontend, rest and pdf have a Dependabot `CODECOV_TOKEN` (pdf #1306 failed its Codecov upload without it).
+frontend, rest and pdf have a Dependabot `CODECOV_TOKEN` (pdf #1306 failed its Codecov upload without it). api has no Dependabot `STRIPE_WEBHOOK_KEY` / `STRIPE_WEBHOOK_SIGNING_SECRET`: on a Dependabot-triggered run every `40-stripe-element-*` spec stays `NEW` and shard 4 hits its 30 min timeout (api #12291, 2026-10-10). A rerun keeps the Dependabot actor; a push from a maintainer (a local rebase) gets the repo secrets.
 
 |                             | opencollective-api                                                                                                   | opencollective-frontend                                                                             |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |

@@ -34,8 +34,9 @@ use_node24() {
   node -v
 }
 
-# gh with up to 3 attempts (api.github.com returns 502/504 now and then)
-ghr() { local i; for i in 1 2 3; do gh "$@" && return 0; sleep "${GHR_SLEEP:-3}"; done; return 1; }
+# gh with up to 3 attempts and a growing pause (api.github.com returns 502/504 in bursts: three tries 3 s apart
+# all failed on 2026-10-16)
+ghr() { local i; for i in 1 2 3; do gh "$@" && return 0; [[ $i == 3 ]] || sleep $(( ${GHR_SLEEP:-5} * i * i )); done; return 1; }
 
 BOT_AUTHORS='app/renovate|app/dependabot|renovate\[bot\]|dependabot\[bot\]'
 

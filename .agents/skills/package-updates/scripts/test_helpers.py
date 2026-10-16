@@ -38,7 +38,8 @@ class Helpers(unittest.TestCase):
         self.log = self.root / 'calls.jsonl'
         self.env = dict(os.environ, PATH=str(self.bin) + ':' + os.environ['PATH'],
                         FIXTURE=str(self.fixture), CALLS=str(self.log),
-                        COUNTERS=str(self.root / 'counters.json'), TIMEOUT_MIN='0', INTERVAL='0')
+                        COUNTERS=str(self.root / 'counters.json'), TIMEOUT_MIN='0', INTERVAL='0',
+                        GHR_SLEEP='0', STATUS_RETRY_SLEEP='0')
         gh = self.bin / 'gh'
         gh.write_text('''#!/usr/bin/env python3
 import json, os, pathlib, subprocess, sys
@@ -72,6 +73,10 @@ elif args[:2] == ['issue', 'list']:
     issue = dict(f['issue'])
     if edited.exists() and not f.get('rewrite'): issue['body'] = edited.read_text()
     value = [issue]
+elif args[0] == 'api' and any('dependabot/alerts' in a for a in args): value = f.get('alerts', [])
+elif args[0] == 'api' and any('contents/package-lock.json' in a for a in args):
+    print(json.dumps(f.get('lock', {}))); sys.exit()
+elif args[0] == 'api' and args[1].count('/') == 2 and args[1].startswith('repos/'): value = {'default_branch': 'main'}
 elif args[0] == 'api' and '/compare/' in args[1]: value = {'behind_by': 2}
 else: sys.exit(0)
 query = args[args.index('--jq')+1] if '--jq' in args else '.'
@@ -151,6 +156,42 @@ sys.exit(r.returncode)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('current finding', result.stdout)
         self.assertNotIn('obsolete finding', result.stdout)
+
+    def test_ai_review_lists_sentry_threads(self):
+        value = {'headRefOid': 'head', 'reviews': {'nodes': []}, 'reviewThreads': {'nodes': [
+            {'id': 'T1', 'isResolved': False, 'isOutdated': False, 'path': 'a.ts', 'line': 3,
+             'comments': {'nodes': [{'author': {'login': 'sentry'}, 'body': 'blocks the event loop'}]}}]}}
+        result = self.call('ai-review.sh', {'graphql': {'data': {'repository': {'pullRequest': value}}}}, '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('blocks the event loop', result.stdout)
+
+    def test_alerts_traces_vulnerable_copies_to_their_dependents(self):
+        def alert(number, name, patched):
+            return {'number': number, 'created_at': '2026-10-06T00:00:00Z',
+                    'dependency': {'package': {'name': name}, 'manifest_path': 'package-lock.json'},
+                    'security_advisory': {'severity': 'high', 'ghsa_id': f'GHSA-{number}', 'summary': f'{name} issue'},
+                    'security_vulnerability': {'vulnerable_version_range': '< 9',
+                                               'first_patched_version': {'identifier': patched} if patched else None}}
+        lock = {'packages': {
+            '': {'dependencies': {'lodash': '^4.18.0', 'x': '1.0.0', 'z': '1.0.0'}},
+            'node_modules/lodash': {'version': '4.18.1'},
+            'node_modules/x': {'version': '1.0.0', 'dependencies': {'lodash': '4.17.21'}},
+            'node_modules/x/node_modules/lodash': {'version': '4.17.21'},
+            'node_modules/x/node_modules/y': {'version': '2.0.0', 'dependencies': {'lodash': '~4.17.0'}},
+            'node_modules/z': {'version': '1.0.0', 'dependencies': {'lodash': '^4.0.0'}},
+            'node_modules/sprintf-js': {'version': '1.0.3', 'dev': True},
+            'node_modules/argparse': {'version': '1.0.10', 'dev': True, 'dependencies': {'sprintf-js': '~1.0.2'}}}}
+        fixture = {'alerts': [alert(1, 'lodash', '4.18.0'), alert(2, 'sprintf-js', None)], 'lock': lock}
+        result = self.call('alerts.sh', fixture, env=dict(self.env, ALERTS_UPSTREAM='0'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('lodash@4.18.1  runtime  ok', result.stdout)
+        self.assertIn('lodash@4.17.21  runtime  vulnerable  at node_modules/x/node_modules/lodash', result.stdout)
+        self.assertIn('pinned by x@1.0.0 wants 4.17.21', result.stdout)
+        self.assertIn('pinned by y@2.0.0 wants ~4.17.0', result.stdout)
+        self.assertNotIn('pinned by z', result.stdout)
+        self.assertIn('first patched: none', result.stdout)
+        self.assertIn('sprintf-js@1.0.3  dev  vulnerable (no fix released)', result.stdout)
+        self.assertIn('pinned by argparse@1.0.10 wants ~1.0.2', result.stdout)
 
     def test_own_pr_needing_review_does_not_bypass(self):
         result = self.call('merge.sh', {'pr': pr(author={'login': 'reviewer'},
