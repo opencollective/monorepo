@@ -24,3 +24,6 @@ skills-lock.json
 
 # Use a symlink if you want to access the skills from Claude
 .claude
+
+# Ignored internal projects, we'll see later if we want to add them
+/opencollective-workflows
