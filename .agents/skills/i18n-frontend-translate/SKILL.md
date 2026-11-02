@@ -18,7 +18,7 @@ description: Translates untranslated frontend locale strings with repo scripts. 
 ## Workflow (loop)
 
 1. **User inputs**: `locale` + free-text **instructions** (follow them for register, formality, product terms, and consistency).
-   If `references/<locale>.md` exists in this skill, read it first and follow it: it is the style guide for that locale (glossary, address form, terms kept in English). Currently: [references/de.md](references/de.md) for German.
+   If `references/<locale>.md` exists in this skill, read it first and follow it: it is the style guide for that locale (glossary, address form, terms kept in English). Currently: [references/de.md](references/de.md) for German, [references/fr.md](references/fr.md) for French.
 
 2. **List work**: Run show-untranslated with a small batch so the task stays reviewable:
 
@@ -80,9 +80,10 @@ Use when the English line alone is ambiguous (button vs heading, legal vs casual
 
 ## Locale style guides
 
-| Locale | Guide                                | Covers                                                                                                                                     |
-| ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `de`   | [references/de.md](references/de.md) | Financial and accounting glossary, Fiscal Host and other terms kept in English, "du" address, typography, ids that belong in `IGNORED.de`. |
+| Locale | Guide                                | Covers                                                                                                                                                    |
+| ------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `de`   | [references/de.md](references/de.md) | Financial and accounting glossary, Fiscal Host and other terms kept in English, "du" address, typography, ids that belong in `IGNORED.de`.                |
+| `fr`   | [references/fr.md](references/fr.md) | Financial and accounting glossary, "hôte fiscal", "vous" address, French capitalization, calques to rewrite, typography, ids that belong in `IGNORED.fr`. |
 
 Read the guide before translating or reviewing that locale. When a guide and existing catalog strings disagree, the guide wins: the catalog may still contain the mistranslations the guide was written to remove.
 
