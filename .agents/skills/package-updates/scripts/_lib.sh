@@ -19,7 +19,11 @@ resolve_repo() {
   esac
   LOCAL_REPO=""
   for d in "$skill_root/opencollective-$SHORT" "$HOME/Dev/opencollective/$SHORT"; do
-    if [[ -d "$d/.git" ]] || git -C "$d" rev-parse --git-dir >/dev/null 2>&1; then LOCAL_REPO="$d"; break; fi
+    # The candidate must be a repository root itself: an uninitialized submodule is an empty directory
+    # in which git finds the monorepo.
+    [[ -d "$d" ]] || continue
+    local top; top=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null) || continue
+    if [[ "$(cd "$top" && pwd -P)" == "$(cd "$d" && pwd -P)" ]]; then LOCAL_REPO="$d"; break; fi
   done
   export REPO SHORT LOCAL_REPO
 }
