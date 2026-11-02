@@ -9,16 +9,17 @@ if [[ "${1:-}" == "--approve" ]]; then approve=1; shift; fi
 me=$(gh api user --jq .login)
 merge_err=$(mktemp "${TMPDIR:-/tmp}/package-merge.XXXXXX")
 trap 'rm -f "$merge_err"' EXIT
+fields=title,state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,isDraft,author,reviewDecision,latestReviews
 result=0
 for arg in "$@"; do
   pr="${arg%%@*}"; expected=""
   [[ "$arg" == *@* ]] && expected="${arg#*@}"
-  js=$(gh pr view "$pr" -R "$REPO" --json title,state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,isDraft,author,reviewDecision)
+  js=$(gh pr view "$pr" -R "$REPO" --json "$fields")
   # GitHub recomputes mergeability after every merge on the base branch: UNKNOWN is transient, ask again
   for attempt in 1 2 3; do
     [[ "$(jq -r .mergeable <<<"$js")" == "UNKNOWN" ]] || break
     sleep 5
-    js=$(gh pr view "$pr" -R "$REPO" --json title,state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,isDraft,author,reviewDecision)
+    js=$(gh pr view "$pr" -R "$REPO" --json "$fields")
   done
   title=$(jq -r .title <<<"$js")
   sha=$(jq -r .headRefOid <<<"$js")
@@ -32,18 +33,24 @@ for arg in "$@"; do
   if ! jq -e .green <<<"$checks" >/dev/null; then
     echo "#$pr: checks not green: $(jq -c . <<<"$checks"); skipped"; result=1; continue
   fi
-  # --approve also records the authorized review when branch protection requires none.
+  # Every merge needs an approval, even where branch protection requires none (empty reviewDecision):
+  # GitHub's APPROVED decision, an approving review by someone else, or --approve on a PR not ours.
   review=$(jq -r '.reviewDecision // ""' <<<"$js")
+  own=0; [[ "$(jq -r .author.login <<<"$js")" == "$me" ]] && own=1
   if [[ "$review" == "CHANGES_REQUESTED" ]]; then echo "#$pr: changes requested by a reviewer; skipped"; result=1; continue; fi
-  if [[ "$review" == "REVIEW_REQUIRED" ]]; then
-    if [[ "$(jq -r .author.login <<<"$js")" == "$me" ]]; then
-      echo "#$pr: your own PR requires another review; skipped"; result=1; continue
+  approved=0
+  if [[ "$review" == "APPROVED" ]]; then approved=1
+  elif [[ -z "$review" ]] && jq -e --arg me "$me" 'any((.latestReviews // [])[]; .state == "APPROVED" and .author.login != $me)' <<<"$js" >/dev/null; then approved=1
+  fi
+  if [[ "$approved" != 1 ]]; then
+    if [[ "$own" == 1 ]]; then
+      echo "#$pr: your own PR needs another maintainer's approval; skipped"; result=1; continue
     fi
     if [[ "$approve" != 1 ]]; then
       echo "#$pr: needs the user's review (rerun with --approve after the batch); skipped"; result=1; continue
     fi
   fi
-  if [[ "$approve" == 1 && "$(jq -r .author.login <<<"$js")" != "$me" ]]; then
+  if [[ "$approve" == 1 && "$own" != 1 ]]; then
     if ! gh api --method POST "repos/$REPO/pulls/$pr/reviews" -f event=APPROVE -f commit_id="$sha" >/dev/null; then
       echo "#$pr: approval failed"; result=1; continue
     fi
