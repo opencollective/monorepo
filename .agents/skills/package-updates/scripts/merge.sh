@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Merge reviewed heads. --approve records an explicitly authorized review first.
-# usage: merge.sh <api|frontend|rest|images|pdf|contributors-svg> [--approve] <pr-number> ...
+# usage: merge.sh <api|frontend|rest|images|pdf|contributors-svg> [--approve] <pr-number>[@<head-sha-prefix>] ...
+# With @sha, the PR is skipped unless its live head still starts with the sha the user reviewed.
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
 approve=0
 if [[ "${1:-}" == "--approve" ]]; then approve=1; shift; fi
@@ -9,7 +10,9 @@ me=$(gh api user --jq .login)
 merge_err=$(mktemp "${TMPDIR:-/tmp}/package-merge.XXXXXX")
 trap 'rm -f "$merge_err"' EXIT
 result=0
-for pr in "$@"; do
+for arg in "$@"; do
+  pr="${arg%%@*}"; expected=""
+  [[ "$arg" == *@* ]] && expected="${arg#*@}"
   js=$(gh pr view "$pr" -R "$REPO" --json title,state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,isDraft,author,reviewDecision)
   # GitHub recomputes mergeability after every merge on the base branch: UNKNOWN is transient, ask again
   for attempt in 1 2 3; do
@@ -19,6 +22,9 @@ for pr in "$@"; do
   done
   title=$(jq -r .title <<<"$js")
   sha=$(jq -r .headRefOid <<<"$js")
+  if [[ -n "$expected" && "$sha" != "$expected"* ]]; then
+    echo "#$pr: head is now $sha, not the reviewed $expected; skipped"; result=1; continue
+  fi
   checks=$(checks_summary <<<"$js")
   if ! jq -e '.state == "OPEN" and .isDraft == false and .mergeable == "MERGEABLE"' <<<"$js" >/dev/null; then
     echo "#$pr: not open, ready and mergeable; skipped"; result=1; continue

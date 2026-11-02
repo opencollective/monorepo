@@ -153,7 +153,9 @@ bash "$SK/scripts/failures.sh" api 12194
   `b60205` like api's) and post one comment starting `Blocked by <PR, package or upstream issue>.`,
   then why (evidence: version, peer range, failing check), what unblocks it, and why it stays open
   rather than closed. Skip if already labelled with an up-to-date comment. When the blocker clears,
-  remove the label.
+  remove the label and post one comment starting `Unblocked:` naming what cleared it, with its link
+  (rest #731: "rest no longer depends on `graphql-request`, #801 removed it"); otherwise the old
+  "Blocked by" comment still reads as current. The same applies when a PR moves from `blocked` to `major`.
 - A repeated failure exhausts the routine retry budget; investigate before retrying again. A cancelled shard next to a failed one is
   fail-fast collateral, not a second failure.
 - **Leave alone:** another human's work without permission, or insufficient evidence to act.
@@ -260,6 +262,9 @@ rather than returning the old head's result. For reruns, verify the requested ru
 has started before polling PR checks; old completed checks can remain briefly visible.
 
 Any repeat failure goes back to investigation. A timeout is a pending state, not success.
+Report a PR as green only from a completed `wait-checks.sh` result on its current head, never from a
+rerun that was still running (api #12399 was reported green while its attempt 2 had failed;
+`merge.sh` caught it).
 Typical historical durations are 20–26 minutes for API tests and 3–25 minutes per e2e shard.
 
 ## 4b. Own review, second-agent review, then the user
@@ -365,9 +370,12 @@ One line per item with the head SHA when it matters. The user answers with "all"
 ## 6. Execute and report
 
 ```sh
-bash "$SK/scripts/merge.sh" api --approve 12197 12431   # after the batch: approve from the user's account, squash-merge
-bash "$SK/scripts/merge.sh" api 12197                   # PR already approved on GitHub
+bash "$SK/scripts/merge.sh" api --approve 12197@3b181078 12431@910e98c3   # after the batch: approve, squash-merge the reviewed heads
+bash "$SK/scripts/merge.sh" api 12197@3b181078                            # PR already approved on GitHub
 ```
+
+Pass each batch item as `<pr>@<head sha shown in the batch>`: without it the helper merges whatever head
+is live, including one pushed after the user's yes.
 
 The merge helper refreshes state, rejects missing/failed/pending checks, binds the review and the
 merge to the checked head, reports missing approval for the user's own PRs, and never bypasses
