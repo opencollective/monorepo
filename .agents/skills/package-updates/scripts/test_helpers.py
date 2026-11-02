@@ -135,6 +135,14 @@ sys.exit(r.returncode)
         self.assertEqual(merge[merge.index('--match-head-commit') + 1], 'head-one')
         self.assertNotIn('--admin', merge)
 
+    def test_merge_skips_a_head_other_than_the_reviewed_one(self):
+        result = self.call('merge.sh', {'pr': pr()}, '1@head-two')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('not the reviewed head-two', result.stdout)
+        self.assertFalse(any(c[:2] == ['pr', 'merge'] for c in self.calls()))
+        result = self.call('merge.sh', {'pr': pr()}, '1@head-o')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_review_requires_explicit_flag(self):
         result = self.call('merge.sh', {'pr': pr(reviewDecision='REVIEW_REQUIRED')}, '1')
         self.assertNotEqual(result.returncode, 0)
