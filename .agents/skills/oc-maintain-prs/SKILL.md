@@ -7,6 +7,8 @@ description: Keep the operator's open, non-draft GitHub PRs healthy - update sta
 
 Sweep every open, non-draft PR authored by the current `gh` user and drive each one to green. Use `gh` for all GitHub reads and writes. Work in worktrees per the root `AGENTS.md` (`/workspace/.worktrees/pr-<number>/<repo>`, created from the repo's own checkout), and read that repo's `AGENTS.md` before changing code in it.
 
+The parent agent runs inventory, triage, escalations, flaky-test comments and the report; each PR that needs work gets its own sub-agent for the per-PR steps (3 to 6). See [Delegate per PR](#delegate-per-pr).
+
 Pushing commits to the operator's own PR branches is the expected output of this skill. Everything else outward-facing (merging, closing, force-pushing, resolving a reviewer's thread, changing PR scope) is the operator's call.
 
 ## 1. Inventory
@@ -36,9 +38,9 @@ A PR can need several actions; apply them in this order, because a fresh merge c
 | **Feedback** | unresolved, non-outdated review threads or requested changes |
 | **CI** | any failing required check after the update |
 
-PRs needing nothing are listed as clean and go straight to the watch step.
+A PR needing none of these, with every required check already passing, is **clean**: list it and leave it alone. A PR whose only issue is pending checks stays with the parent, which watches it and dispatches a sub-agent if it turns red or conflicting.
 
-**Escalate** (pause that PR, keep working the others, ask via AskUserQuestion with the evidence and a recommendation) when any of these holds:
+**Escalate** (pause that PR, keep working the others, get the operator's decision with the evidence and a recommendation) when any of these holds:
 
 - conflicts span more than ~3 files, or touch the same logic (not just imports, lockfiles, generated files, or adjacent lines)
 - a review comment asks for a redesign, a new approach, or contradicts another comment, or you disagree with it
@@ -46,6 +48,26 @@ PRs needing nothing are listed as clean and go straight to the watch step.
 - the PR targets a branch other than `main`, or is from a fork you cannot push to
 
 The test is whether the operator would be surprised by the resulting diff. Small, mechanical, obviously-correct work proceeds; judgment calls go to them.
+
+## Delegate per PR
+
+Start **one sub-agent per non-clean PR**, in the background, all in a single message so they run concurrently. Queue within available concurrency when the list is long. If sub-agents are unavailable, say so to the operator and work the PRs one at a time yourself.
+
+Brief each sub-agent with:
+
+- the PR's snapshot from step 1 and its triage actions and escalation flags from step 2
+- its worktree path (`/workspace/.worktrees/pr-<number>/<repo>`) and the instruction to read that repo's `AGENTS.md`
+- a pointer to this file: it owns steps 3 to 6 for this one PR, including the escalation rules in step 2
+- any operator instructions that apply to the PR
+
+Each sub-agent pushes to its own PR branch, replies in its PR's threads and re-runs its PR's checks. Everything that crosses PRs or needs the operator goes back to the parent:
+
+- **Escalation**: the sub-agent stops work on the escalated item, finishes the rest, and returns the question, evidence and a recommendation. The parent asks the operator via AskUserQuestion, then resumes the same sub-agent with SendMessage carrying the answer, so its context stays intact.
+- **Flaky test**: the sub-agent returns the test's full title, the trimmed assertion and first test-file frame, the failed and passing run URLs, and the PR. The parent dedupes across sub-agents and posts per [Document flaky tests](#document-flaky-tests).
+
+API tests share the `opencollective_test` database and reset it, so concurrent local runs clobber each other. Sub-agents run them under a shared lock: `flock /tmp/oc-api-test.lock ./scripts/test.sh <file>`.
+
+Each sub-agent returns: actions taken, each CI failure's classification with evidence, final check and mergeable state, links to commits and thread replies, and any escalation or flaky-test record. Completion for the parent: every non-clean PR has a returned report, and every escalation is answered and resumed or left waiting on the operator.
 
 ## 3. Update against main
 
@@ -82,7 +104,7 @@ A test is **flaky** when it failed for reasons the diff cannot explain and then 
 - API tests (mocha unit/GraphQL, `opencollective-api` CI): https://github.com/opencollective/opencollective/issues/6564
 - E2E tests (Cypress, `opencollective-frontend` CI): https://github.com/opencollective/opencollective/issues/6484
 
-Both issues are public, so the comment carries only what helps debugging. Never paste tokens, emails of real users, or full logs. Before posting, read the issue's recent comments (`gh api repos/opencollective/opencollective/issues/<n>/comments --paginate`) and search for the test's full title. When it already appears, add a comment only if you have a new error message or a new PR to cite; a repeat of the same failure gets nothing new.
+The parent posts these from the sub-agents' flaky-test records. Both issues are public, so the comment carries only what helps debugging. Never paste tokens, emails of real users, or full logs. Before posting, read the issue's recent comments (`gh api repos/opencollective/opencollective/issues/<n>/comments --paginate`) and search for the test's full title. When it already appears, add a comment only if you have a new error message or a new PR to cite; a repeat of the same failure gets nothing new.
 
 Match the style of existing comments: the failing test's describe path and name, the assertion error with its file and line, a link to the failing run, and the PR. Example:
 
@@ -103,8 +125,8 @@ Trim the stack to the assertion and the first test-file frame, and for Cypress i
 
 ## 6. Watch until green
 
-Collect every PR touched. Poll their checks (`gh pr checks <n> --watch --fail-fast` in the background per PR, or a periodic `gh pr checks` loop) and handle each state change with steps 3 to 5 again: a new failure, a new conflict because main moved, new review comments. Stop when every touched PR has all required checks passing and is mergeable, or when the only PRs left are escalated ones waiting on the operator.
+The sub-agent watches its own PR (`gh pr checks <n> --watch --fail-fast`) and handles each state change with steps 3 to 5 again: a new failure, a new conflict because main moved, new review comments. It returns once all required checks pass and the PR is mergeable, or once the only remaining work is escalated. The parent watches pending-only PRs the same way and dispatches a sub-agent when one needs work. The sweep is done when every PR is green and mergeable, or waiting on the operator.
 
 ## 7. Report
 
-One table: PR, actions taken (updated / feedback / CI fix / re-run / flaky test documented), final state, and for escalated or stuck PRs the question or blocker. Do not merge anything.
+Built from the sub-agents' reports. One table: PR, actions taken (updated / feedback / CI fix / re-run / flaky test documented), final state, and for escalated or stuck PRs the question or blocker. Do not merge anything.
