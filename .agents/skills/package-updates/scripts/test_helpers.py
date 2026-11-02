@@ -411,6 +411,30 @@ if sys.argv[1] == 'install':
         result = self.call('rerun.sh', fixture, '1')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_merge_respects_a_change_request_without_required_review(self):
+        value = pr(reviewDecision='', latestReviews=[{'state': 'APPROVED', 'author': {'login': 'maintainer'}},
+                                                     {'state': 'CHANGES_REQUESTED', 'author': {'login': 'other'}}])
+        for args in (['1'], ['--approve', '1']):
+            result = self.call('merge.sh', {'pr': value}, *args)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('changes requested', result.stdout)
+        self.assertFalse(any(c[:2] == ['pr', 'merge'] for c in self.calls()))
+
+    def test_resolve_repo_skips_an_uninitialized_submodule(self):
+        mono = self.root / 'mono'
+        scripts = mono / '.agents/skills/package-updates/scripts'
+        scripts.mkdir(parents=True)
+        shutil.copy(SCRIPTS / '_lib.sh', scripts / '_lib.sh')
+        (mono / 'opencollective-api').mkdir()
+        service = self.root / 'home/Dev/opencollective/api'
+        service.mkdir(parents=True)
+        for repo in (mono, service):
+            self.assertEqual(run(['git', 'init', '-q'], cwd=repo).returncode, 0)
+        env = dict(self.env, HOME=str(self.root / 'home'))
+        result = run(['bash', '-c', 'source "$1"; resolve_repo api; echo "$LOCAL_REPO"', '_', str(scripts / '_lib.sh')], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(service))
+
     def test_approve_records_review_without_required_protection(self):
         result = self.call('merge.sh', {'pr': pr(reviewDecision='')}, '--approve', '1')
         self.assertEqual(result.returncode, 0, result.stderr)

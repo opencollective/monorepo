@@ -37,7 +37,10 @@ for arg in "$@"; do
   # GitHub's APPROVED decision, an approving review by someone else, or --approve on a PR not ours.
   review=$(jq -r '.reviewDecision // ""' <<<"$js")
   own=0; [[ "$(jq -r .author.login <<<"$js")" == "$me" ]] && own=1
-  if [[ "$review" == "CHANGES_REQUESTED" ]]; then echo "#$pr: changes requested by a reviewer; skipped"; result=1; continue; fi
+  # latestReviews holds each reviewer's latest state: a change request still stands even where reviewDecision is empty
+  if [[ "$review" == "CHANGES_REQUESTED" ]] || jq -e 'any((.latestReviews // [])[]; .state == "CHANGES_REQUESTED")' <<<"$js" >/dev/null; then
+    echo "#$pr: changes requested by a reviewer; skipped"; result=1; continue
+  fi
   approved=0
   if [[ "$review" == "APPROVED" ]]; then approved=1
   elif [[ -z "$review" ]] && jq -e --arg me "$me" 'any((.latestReviews // [])[]; .state == "APPROVED" and .author.login != $me)' <<<"$js" >/dev/null; then approved=1
