@@ -66,6 +66,8 @@ elif args[:2] == ['run', 'view'] and '--log' in args:
     print(f.get('log', ''), end=''); sys.exit()
 elif args[:2] == ['run', 'view']: value = {'jobs': f.get('jobs', []), 'status': 'completed'}
 elif args[:2] == ['pr', 'checks']: value = []
+elif args[:2] == ['run', 'rerun']:
+    sys.exit(1 if f.get('rerun_fails') else 0)
 elif args[:2] == ['issue', 'edit']:
     pathlib.Path(os.environ['CALLS']).with_name('edited.md').write_text(sys.stdin.read()); sys.exit()
 elif args[:2] == ['issue', 'list']:
@@ -383,6 +385,31 @@ if sys.argv[1] == 'install':
         result = run(['bash', str(SCRIPTS / 'status.sh'), 'invalid'], env=self.env)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn('Status unavailable', result.stdout)
+
+    def test_merge_without_required_review_still_needs_an_approval(self):
+        result = self.call('merge.sh', {'pr': pr(reviewDecision='')}, '1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("needs the user's review", result.stdout)
+        own = pr(reviewDecision='', author={'login': 'reviewer'},
+                 latestReviews=[{'state': 'APPROVED', 'author': {'login': 'reviewer'}}])
+        result = self.call('merge.sh', {'pr': own}, '--approve', '1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("needs another maintainer's approval", result.stdout)
+        self.assertFalse(any(c[:2] == ['pr', 'merge'] for c in self.calls()))
+        own['latestReviews'].append({'state': 'APPROVED', 'author': {'login': 'maintainer'}})
+        result = self.call('merge.sh', {'pr': own}, '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(c[:2] == ['pr', 'merge'] for c in self.calls()))
+
+    def test_rerun_reports_a_failed_request(self):
+        fixture = {'pr': pr(), 'rerun_fails': True,
+                   'runs': [dict(databaseId=7, workflowName='E2E', conclusion='failure', status='completed')]}
+        result = self.call('rerun.sh', fixture, '1')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('could not rerun 7', result.stdout)
+        fixture['rerun_fails'] = False
+        result = self.call('rerun.sh', fixture, '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_approve_records_review_without_required_protection(self):
         result = self.call('merge.sh', {'pr': pr(reviewDecision='')}, '--approve', '1')
