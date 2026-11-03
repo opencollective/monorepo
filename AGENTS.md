@@ -30,7 +30,9 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 
 **Git worktrees:** Work in a Git worktree for each repository you change. Store worktrees under `/workspace/.worktrees/`, using a feature name and repository name in each path (for example, `.worktrees/<feature>/opencollective-api` and `.worktrees/<feature>/opencollective-frontend`). For a feature spanning multiple repositories, reuse the same `<feature>` directory name in each repository's worktree path. Create and manage each worktree from its own repository; never create a worktree for `/workspace` itself.
 
-**Commits:** [Conventional Commits](https://www.conventionalcommits.org/) (`feat`, `fix`, `chore`, `docs`, …). Short title with user-visible impact (`fix(search): crash when searching with special characters`). Then a blank line, `Fixes #123` or a URL, and an optional short body. Optional `npm run commit` (commitizen) after `git add`. Use hyphens, not em dashes.
+**Commits:** [Conventional Commits](https://www.conventionalcommits.org/) (`feat`, `fix`, `chore`, `docs`, …). Short title with user-visible impact (`fix(search): crash when searching with special characters`). Then a blank line, `Fixes opencollective/opencollective#123` or a URL, and an optional short body. Optional `npm run commit` (commitizen) after `git add`. Use hyphens, not em dashes.
+
+**Issue and PR references:** Work spans several repos, so write every issue or PR reference (commits, PR bodies, comments, reports) as `owner/repo#number`, such as `opencollective/opencollective#4242`. GitHub links a bare `#4242` to the current repo, which is usually the wrong one.
 
 **Quality:** From the repo subfolder, run that repo's TypeScript, ESLint, and Prettier scripts (see its `AGENTS.md`). Must pass before handoff. Repeat in every touched repo.
 
