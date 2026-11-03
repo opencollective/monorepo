@@ -77,39 +77,51 @@
           <a class="issue-link" target="_blank" rel="noopener noreferrer"></a
           ><span class="badge"></span>
         </div>
-        <section class="issue-summary">
-          <strong>TL;DR</strong>
-          <p class="summary-text"></p>
-        </section>
-        <section class="recommendation">
-          <strong>Decision and reasoning</strong>
-          <p class="finding"></p>
-        </section>
-        <ul class="evidence"></ul>
-        <details class="source">
-          <summary>Original issue and discussion</summary>
-          <pre class="source-body"></pre>
-          <div class="source-comments"></div>
-        </details>
-        <table>
-          <tbody></tbody>
-        </table>
+        <p class="summary-text"></p>
+        <div class="glance" role="group" aria-label="Proposed changes">
+          <div class="glance-primary"></div>
+          <div class="glance-secondary"></div>
+        </div>
         <section class="comment">
           <div class="comment-title">
-            <strong>Proposed comment</strong
-            ><button class="toggle-comment secondary" type="button">
+            <h3>Proposed comment</h3>
+            <button class="toggle-comment secondary" type="button">
               Remove comment
             </button>
           </div>
           <pre></pre>
         </section>
-        <p class="limits hint"></p>
+        <div class="details" hidden>
+          <section class="recommendation">
+            <h3>Decision and reasoning</h3>
+            <p class="finding"></p>
+            <ul class="evidence"></ul>
+          </section>
+          <section>
+            <h3>All proposed changes</h3>
+            <table>
+              <tbody></tbody>
+            </table>
+          </section>
+          <p class="limits hint"></p>
+          <details class="source">
+            <summary>Original issue and discussion</summary>
+            <pre class="source-body"></pre>
+            <div class="source-comments"></div>
+          </details>
+        </div>
         <p class="outcome hint"></p>
         <div class="actions">
           <button class="approve" type="button">Approve</button
           ><button class="skip secondary" type="button">Skip</button
           ><button class="instructions-button secondary" type="button">
-            Add instructions
+            Add instructions</button
+          ><button
+            class="toggle-details link-button"
+            type="button"
+            aria-expanded="false"
+          >
+            Show details
           </button>
         </div>
         <div class="instructions" hidden>
