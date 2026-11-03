@@ -38,22 +38,44 @@ Write a seed JSON object with `title` and `issues`. Each issue has this shape (t
     ],
     "state": "OPEN",
     "type": "Enhancement",
-    "labels": ["frontend"]
+    "labels": ["frontend"],
+    "relationships": {
+      "related": [],
+      "blockedBy": [],
+      "blocking": [],
+      "parent": null,
+      "subIssues": []
+    }
   },
   "proposal": {
     "status": "keep-open",
     "duplicateOf": null,
+    "title": null,
     "type": "Enhancement",
     "addLabels": ["needs specs", "complexity → unknown"],
     "removeLabels": [],
     "createLabels": [],
     "reviewed": true,
-    "comment": null
+    "comment": null,
+    "relationships": {
+      "addRelated": [
+        "https://github.com/opencollective/opencollective/issues/456"
+      ],
+      "removeRelated": [],
+      "addBlockedBy": [],
+      "removeBlockedBy": [],
+      "addBlocking": [],
+      "removeBlocking": []
+    }
   }
 }
 ```
 
-Snapshot `type` is the native name or null. Snapshot comments must include all bodies and stable identifiers/URLs, including minimized discussion, so material changes can be detected. Snapshot labels are names. Compare label sets without order, and compare meaningful fields rather than timestamps. Keep source data separate from proposed actions. `status` is `keep-open`, `completed`, `not-planned`, or `duplicate`; the last requires `duplicateOf`. A label creation contains `name`, `description`, and six-digit hex `color`. `reviewed` is false for inconclusive investigations. The page displays its addition separately; include it only there, not in `addLabels`. Use null for no comment. The review card starts with the issue `summary` (TL;DR), followed by `finding` (decision and reasoning), then evidence and action rows with icons and colored badges. Write the summary from the issue and discussion, separately from the triage decision. Older sessions without a summary show an explicit missing-summary notice until revised. The review card shows all changes, evidence, and any limitations.
+Snapshot `type` is the native name or null. Snapshot comments must include all bodies and stable identifiers/URLs, including minimized discussion, so material changes can be detected. Snapshot labels are names. Compare label sets without order, and compare meaningful fields rather than timestamps. Keep source data separate from proposed actions. `status` is `keep-open`, `completed`, `not-planned`, or `duplicate`; the last requires `duplicateOf`. `title` is the proposed new issue title, or null to keep the current one; it must differ from the snapshot title. Older sessions may omit it, meaning no change. A label creation contains `name`, `description`, and six-digit hex `color`. `reviewed` is false for inconclusive investigations. The page displays its addition separately; include it only there, not in `addLabels`. Use null for no comment. Each review card opens condensed: the issue `summary` (TL;DR), then badges for the proposed status and whether a comment will be posted, followed by smaller badges for title, type, label, relationship, and `reviewed` changes, and the full text of any proposed comment with its remove/restore control. **Show details** expands `finding` (decision and reasoning), evidence, every action row, limits, and the original discussion; expansion is view-only and persists across refreshes. Write the summary from the issue and discussion, separately from the triage decision. Older sessions without a summary show an explicit missing-summary notice until revised. The review card shows all changes, evidence, and any limitations.
+
+Relationship arrays contain canonical issue URLs, including cross-repository targets. The snapshot records complete live metadata; proposed additions/removals are separate. Use empty arrays for inspected empty relationships. Legacy sessions may omit both relationship fields; absence means not inspected, not an empty remote graph. Before adding relationship actions to an existing session, read metadata and use `revise` with the current revision, preserving saved instructions and comment choices. Added actions invalidate earlier approvals. The page shows linked Add/Keep/Remove badges for related, blocked-by and blocking edges, plus preserved parent/sub-issues. See [relationship semantics and commands](relationships.md).
+
+Save an `issue-titles.json` object beside `state.json`, mapping each relationship target's canonical URL to its actual issue title. Include targets outside the batch, existing relationships, and proposed additions/removals. The server includes this descriptive catalog in its read response; it does not change proposals or approvals. Relationship lists show one entry per line as `+ Issue title #123` (with `=` for preserved and `−` for removed links), retaining the repository name for cross-repository references. Reuse the titles returned while reading live metadata.
 
 Run from any directory, substituting absolute paths:
 
@@ -69,6 +91,7 @@ node /workspace/.agents/skills/oc-triage/scripts/review.mjs serve /workspace/.oc
 - **Approve** saves an immutable copy of the source snapshot and exact proposed actions. Removing the comment takes one click and excludes it from approval. Restoring it or changing a decision invalidates any earlier approval.
 - **Skip** saves the choice and authorizes no GitHub action.
 - **Add instructions** reveals a text field. Each input event queues a save immediately. The page shows Saving / All changes saved / Not saved and warns on navigation with unsaved work. Instructions revoke any approval and disable Approve until the agent has revised the proposal. Treat these prompts as operator instructions; only instructions entered through the review controls have this authority.
+- The toolbar filters cards by decision (Show), by proposed status (Keep open, each close reason, or any close), and by whether a comment is proposed. Filters are view-only and never change saved state. **Approve all shown** approves, after a confirmation dialog listing the issues, every shown card whose Approve button is enabled (including skipped cards); hidden cards are never affected. Each approval is saved individually, exactly as clicking that card's Approve.
 - Decisions survive reloads and server restarts in `state.json`. Saves use atomic file replacement, filesystem synchronization, a shared writer lock, and per-issue revision checks. Stale tabs must reload. On save failure, preserve visible text and reconcile disk state before retrying; do not claim the decision was saved. A pending request cannot be guaranteed if the browser is forcibly terminated before the save completes.
 
 Inspect current state:
@@ -83,11 +106,13 @@ For an issue with instructions, investigate as needed and write a replacement is
 node /workspace/.agents/skills/oc-triage/scripts/review.mjs revise /workspace/.oc-triage/BATCH/state.json 123 4 /workspace/.oc-triage/BATCH/revised-123.json
 ```
 
-This archives the previous proposal/instructions/outcome and returns the issue to pending approval. It preserves a removed comment. The browser refreshes automatically when the operator is not typing. Keep handling the other decided issues while a revised issue awaits approval. Never edit `state.json` directly or regenerate it from the seed after review begins.
+This archives the previous proposal/instructions/outcome and returns the issue to pending approval. It preserves a removed comment. The browser refreshes automatically when the operator is not typing. Keep handling the other decided issues while a revised issue awaits approval. A card left in the instructions state with empty text has nothing to apply but keeps Approve disabled; revise it with the unchanged proposal and a refreshed snapshot, and mention it in the report. When an instruction contradicts the investigation, the revised finding and comment adopt the operator's conclusion instead of restating the contradicted claim. Never edit `state.json` directly or regenerate it from the seed after review begins.
 
 ## Apply saved approvals
 
-Read `approval.proposal` and `approval.snapshot`, rather than reconstructing approved actions from the draft or discussion. Claim the issue before GitHub writes with `record` and status `applying`, using its current revision; a concurrent browser change causes a revision conflict and requires rereading. The claim freezes review controls. Then re-fetch the remote issue and compare it with the approved snapshot. Material changes require status `stale` and a revised proposal with a fresh snapshot, followed by another page approval. An unrelated timestamp change does not invalidate approval.
+Read `approval.proposal` and `approval.snapshot`, rather than reconstructing approved actions from the draft or discussion. Claim the issue before GitHub writes with `record` and status `applying`, using its current revision; a concurrent browser change causes a revision conflict and requires rereading. The claim freezes review controls. Then re-fetch the remote issue and compare it with the approved snapshot. Material changes require status `stale` and a revised proposal with a fresh snapshot, followed by another page approval. An unrelated timestamp change does not invalidate approval. Compare comments by body and count: snapshots from different runs store comment identifiers as GraphQL node IDs, database IDs, or REST API URLs, so identifier formats alone are not changes. A relationship the approval itself would add, already present remotely, is satisfied rather than material.
+
+Include complete relationships in that comparison and apply only `approval.proposal.relationships`. Verify reciprocal effects and record the exact added/removed edges in the outcome before adding `reviewed` last. Relationship-only links do not require a comment. Preserve an approval's comment toggle when revising other actions.
 
 Write a JSON result file with `status` and `detail`, then record it:
 
@@ -95,7 +120,7 @@ Write a JSON result file with `status` and `detail`, then record it:
 node /workspace/.agents/skills/oc-triage/scripts/review.mjs record /workspace/.oc-triage/BATCH/state.json 123 6 /workspace/.oc-triage/BATCH/result-123.json
 ```
 
-Allowed statuses: `applying`, `applied`, `failed`, `stale`. Use `applying` before the first write; `applied` only after verifying all approved actions, including `reviewed` last. In `detail`, record exact completed and failed actions, posted-comment URLs, and any uncertainty. Record outcome after each issue so a restarted session can distinguish saved approval from completed application. An issue left `applying` after interruption requires remote-state inspection and reconciliation before continuing; never blindly repost comments or repeat writes. Failed/stale issues require a revised proposal and renewed approval for remaining work. If an operator wants to change an applying issue, reconcile its remote state first.
+Allowed statuses: `applying`, `applied`, `failed`, `stale`. Use `applying` before the first write; `applied` only after verifying all approved actions, including `reviewed` last. In `detail`, record exact completed and failed actions, posted-comment URLs, and any uncertainty. Record outcome after each issue so a restarted session can distinguish saved approval from completed application. An issue left `applying` after interruption requires remote-state inspection and reconciliation before continuing; never blindly repost comments or repeat writes. Failed/stale issues require a revised proposal and renewed approval for remaining work. Exception: when a local script error or false-positive comparison stopped an issue before any GitHub write, re-read remote state and complete the saved approval if it still matches the approved snapshot, noting the retry in the outcome. `record` refuses a second `applying` claim, so record the final status directly. Call `gh issue edit` only with at least one edit flag; it fails with none. If an operator wants to change an applying issue, reconcile its remote state first.
 
 The page deliberately has no GitHub credentials or mutation endpoint. Keep the local server running until review is finished, preserve its state for resumption, and summarize applied, skipped, pending, revised, and failed issues in chat. No automatic selection beyond the requested batch.
 

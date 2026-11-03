@@ -61,7 +61,7 @@ p {
   border-radius: 8px;
 }
 article {
-  padding: 26px;
+  padding: 20px 24px;
   background: white;
   border: 1px solid #dce4f0;
   border-radius: 14px;
@@ -69,7 +69,7 @@ article {
   box-shadow: 0 3px 12px #142b4805;
 }
 .issue-link {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   flex: 1;
 }
@@ -99,6 +99,14 @@ article[data-decision="instructions"] .badge {
   padding-left: 20px;
   font-size: 13px;
 }
+.relationship-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .evidence li {
   margin: 7px 0;
 }
@@ -115,7 +123,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  margin: 20px 0;
+  margin: 6px 0 0;
 }
 th,
 td {
@@ -132,9 +140,22 @@ th {
   padding-right: 15px;
 }
 .comment {
+  margin-top: 14px;
+  background: #f4fafc;
+  border-left: 3px solid #0f5d75;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.comment pre {
+  margin-top: 8px;
+}
+.comment .toggle-comment {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.comment.removed {
   background: #f7f9fd;
-  border-radius: 10px;
-  padding: 16px;
+  border-left-color: #ced8e8;
 }
 .comment-title {
   justify-content: space-between;
@@ -150,6 +171,7 @@ pre {
 }
 .comment.removed pre {
   color: #66748a;
+  text-decoration: line-through;
 }
 button,
 select {
@@ -220,22 +242,71 @@ textarea {
   }
 }
 
-.issue-summary {
-  margin: 20px 0 16px;
-  padding: 16px 18px;
-  background: #f0f5ff;
-  border-left: 4px solid #245dc1;
-  border-radius: 8px;
+.summary-text {
+  margin: 10px 0 14px;
+  font-size: 15px;
 }
-.issue-summary strong,
-.recommendation > strong {
+.glance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.glance-primary,
+.glance-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.glance-secondary .value-badge {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+.value-badge.primary {
+  border: 1px solid currentColor;
+}
+.value-badge.removed {
+  text-decoration: line-through;
+}
+.details {
+  margin-top: 18px;
+  padding-top: 4px;
+  border-top: 1px solid #edf0f5;
+}
+.details > * {
+  margin-top: 18px;
+}
+h3 {
+  margin: 0;
   font-size: 12px;
   color: #52678b;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.issue-summary p,
 .recommendation p {
   margin: 7px 0 0;
+}
+.outcome {
+  margin: 14px 0 0;
+}
+.actions {
+  margin-top: 16px;
+}
+.link-button {
+  margin-left: auto;
+  background: none;
+  border-color: transparent;
+  color: #245dc1;
+}
+.link-button::after {
+  content: " ▾";
+}
+.link-button[aria-expanded="true"]::after {
+  content: " ▴";
+}
+.tone-comment {
+  background: #e3f4f8;
+  color: #0f5d75;
 }
 .value-badge {
   display: inline-flex;
@@ -273,4 +344,23 @@ textarea {
 }
 .status-row .value-badge {
   border: 1px solid currentColor;
+}
+dialog {
+  max-width: 560px;
+  border: 1px solid #ced8e8;
+  border-radius: 12px;
+  padding: 24px;
+}
+dialog::backdrop {
+  background: rgb(20 30 50 / 40%);
+}
+dialog h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+#approve-all-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-left: 20px;
+  font-size: 13px;
 }

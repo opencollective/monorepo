@@ -31,51 +31,97 @@
             <option value="applied">Applied</option>
           </select></label
         >
+        <label
+          >Proposed status
+          <select id="status-filter">
+            <option value="all">Any status</option>
+            <option value="keep-open">Keep open</option>
+            <option value="completed">Close as completed</option>
+            <option value="not-planned">Close as not planned</option>
+            <option value="duplicate">Close as duplicate</option>
+            <option value="close">Any close</option>
+          </select></label
+        >
+        <label
+          >Comment
+          <select id="comment-filter">
+            <option value="all">Any</option>
+            <option value="proposed">Comment proposed</option>
+            <option value="none">No comment</option>
+          </select></label
+        >
+        <button id="approve-all" type="button" disabled>
+          Approve all shown
+        </button>
         <span id="progress"></span>
         <span id="save" role="status" aria-live="polite">Loading…</span>
       </div>
       <p id="error" role="alert" hidden></p>
     </header>
     <main id="issues"></main>
+    <dialog id="approve-all-dialog" aria-labelledby="approve-all-heading">
+      <form method="dialog">
+        <h2 id="approve-all-heading">Approve shown issues</h2>
+        <p id="approve-all-count"></p>
+        <p id="approve-all-skipped" class="hint" hidden></p>
+        <ul id="approve-all-list"></ul>
+        <div class="actions">
+          <button value="confirm">Approve all</button
+          ><button value="cancel" class="secondary" autofocus>Cancel</button>
+        </div>
+      </form>
+    </dialog>
     <template id="card">
       <article>
         <div class="card-top">
           <a class="issue-link" target="_blank" rel="noopener noreferrer"></a
           ><span class="badge"></span>
         </div>
-        <section class="issue-summary">
-          <strong>TL;DR</strong>
-          <p class="summary-text"></p>
-        </section>
-        <section class="recommendation">
-          <strong>Decision and reasoning</strong>
-          <p class="finding"></p>
-        </section>
-        <ul class="evidence"></ul>
-        <details class="source">
-          <summary>Original issue and discussion</summary>
-          <pre class="source-body"></pre>
-          <div class="source-comments"></div>
-        </details>
-        <table>
-          <tbody></tbody>
-        </table>
+        <p class="summary-text"></p>
+        <div class="glance" role="group" aria-label="Proposed changes">
+          <div class="glance-primary"></div>
+          <div class="glance-secondary"></div>
+        </div>
         <section class="comment">
           <div class="comment-title">
-            <strong>Proposed comment</strong
-            ><button class="toggle-comment secondary" type="button">
+            <h3>Proposed comment</h3>
+            <button class="toggle-comment secondary" type="button">
               Remove comment
             </button>
           </div>
           <pre></pre>
         </section>
-        <p class="limits hint"></p>
+        <div class="details" hidden>
+          <section class="recommendation">
+            <h3>Decision and reasoning</h3>
+            <p class="finding"></p>
+            <ul class="evidence"></ul>
+          </section>
+          <section>
+            <h3>All proposed changes</h3>
+            <table>
+              <tbody></tbody>
+            </table>
+          </section>
+          <p class="limits hint"></p>
+          <details class="source">
+            <summary>Original issue and discussion</summary>
+            <pre class="source-body"></pre>
+            <div class="source-comments"></div>
+          </details>
+        </div>
         <p class="outcome hint"></p>
         <div class="actions">
           <button class="approve" type="button">Approve</button
           ><button class="skip secondary" type="button">Skip</button
           ><button class="instructions-button secondary" type="button">
-            Add instructions
+            Add instructions</button
+          ><button
+            class="toggle-details link-button"
+            type="button"
+            aria-expanded="false"
+          >
+            Show details
           </button>
         </div>
         <div class="instructions" hidden>
