@@ -53,7 +53,9 @@ The test is whether the operator would be surprised by the resulting diff. Small
 
 Start **one sub-agent per non-clean PR**, in the background, all in a single message so they run concurrently. Queue within available concurrency when the list is long. If sub-agents are unavailable, say so to the operator and work the PRs one at a time yourself.
 
-Brief each sub-agent with:
+**Orca first.** When the Orca CLI is available (`ORCA_CLI_COMMAND` is set, or the [orca-cli](../orca-cli/SKILL.md) skill resolves an executable), look up each non-clean PR's existing Orca session before spawning anything, following [references/orca-sessions.md](references/orca-sessions.md). A PR with a live session gets the brief below sent to that session, which already holds the PR's history and worktree; only PRs without one get a sub-agent.
+
+Brief each sub-agent (or revived session) with:
 
 - the PR's snapshot from step 1 and its triage actions and escalation flags from step 2
 - its worktree path (`/workspace/.worktrees/pr-<number>/<repo>`) and the instruction to read that repo's `AGENTS.md`
