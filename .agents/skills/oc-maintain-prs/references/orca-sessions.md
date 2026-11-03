@@ -27,7 +27,7 @@ Build the same brief as for a sub-agent, with two changes:
 Deliver it through the handle `reference find` returned:
 
 - `terminal: <handle>`: read it first (`ORCA terminal read --terminal <handle> --screen --json`). If the agent is mid-turn or showing a permission menu, leave it alone and spawn a sub-agent instead. Otherwise `ORCA terminal send --terminal <handle> --text "<brief>" --enter --wait-submit 10 --json`.
-- `mailbox: orca_session_id:<id>` (a chat session): `ORCA orchestration send --to orca_session_id:<id> --type handoff --subject "oc-maintain-prs: <repo>#<number>" --body "<brief>" --json`.
+- `mailbox: orca_session_id:<id>` (a chat session): `ORCA orchestration send --to orca_session_id:<id> --type handoff --subject "oc-maintain-prs: <owner/repo>#<number>" --body "<brief>" --json`.
 
 Done when the receipt shows `accepted: true` (and `turn_started` for terminals). A refused or unaccepted send falls back to a sub-agent; never send the brief twice to the same session.
 

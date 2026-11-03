@@ -11,6 +11,8 @@ The parent agent runs inventory, triage, escalations, flaky-test comments and th
 
 Pushing commits to the operator's own PR branches is the expected output of this skill. Everything else outward-facing (merging, closing, force-pushing, resolving a reviewer's thread, changing PR scope) is the operator's call.
 
+The sweep spans several repos, so every issue or PR reference you write (thread replies, commit bodies, flaky-test comments, escalations, the report) uses the full `owner/repo#number` form, such as `opencollective/opencollective#4242`. GitHub links a bare `#4242` to the current repo, which is usually the wrong one.
+
 ## 1. Inventory
 
 ```bash
