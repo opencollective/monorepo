@@ -108,6 +108,11 @@ function renderGlance(article, issue) {
         : chip("Comment removed", "neutral", "✎", "primary removed"),
   );
   const secondary = article.querySelector(".glance-secondary");
+  if (p.title) {
+    const title = chip(`Retitle: ${p.title}`, "neutral", "✎");
+    title.title = `Title change (was "${issue.snapshot.title}")`;
+    secondary.append(title);
+  }
   if (p.type !== issue.snapshot.type) {
     const type = chip(p.type, "neutral", "◆");
     type.title = `Type change (was ${issue.snapshot.type || "unset"})`;
@@ -263,6 +268,10 @@ function render() {
     const rows = [
       ["Status", statusText(p)],
       [
+        "Title",
+        p.title ? `${p.title} (was "${issue.snapshot.title}")` : "(preserve)",
+      ],
+      [
         "Type",
         `${p.type}${p.type === issue.snapshot.type ? " (preserve)" : ` (was ${issue.snapshot.type || "unset"})`}`,
       ],
@@ -314,6 +323,7 @@ function render() {
         key === "Status"
           ? STATUS[p.status].icon
           : {
+              Title: "✎",
               Type: "◆",
               "Add labels": "+",
               "Remove labels": "−",

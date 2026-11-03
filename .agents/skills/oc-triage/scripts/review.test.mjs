@@ -285,3 +285,26 @@ test("HTTP saves survive server restart; non-review and stale requests are rejec
   const restored = await (await fetch(restarted.url + "/api/state")).json();
   assert.equal(restored.issues[0].decision, "skipped");
 });
+
+test("a proposed title is approved exactly and must differ from the current title", (t) => {
+  const { file, issue } = fixture(t);
+  const retitled = {
+    ...issue,
+    proposal: { ...issue.proposal, title: "Clearer example title" },
+  };
+  revise(file, 1, 1, retitled);
+  decide(file, 1, 2, "approve");
+  assert.equal(
+    readState(file).issues[0].approval.proposal.title,
+    "Clearer example title",
+  );
+  for (const title of ["", "  ", " Padded ", "Example issue", 42])
+    assert.throws(
+      () =>
+        revise(file, 1, 3, {
+          ...issue,
+          proposal: { ...issue.proposal, title },
+        }),
+      /Invalid proposed title/,
+    );
+});

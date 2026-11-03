@@ -98,6 +98,16 @@ function validateIssue(issue) {
   ) {
     throw fail("Invalid comment or reviewed marker");
   }
+  // Optional so existing sessions remain readable; null keeps the current title.
+  if (
+    p.title !== undefined &&
+    p.title !== null &&
+    (typeof p.title !== "string" ||
+      !p.title.trim() ||
+      p.title !== p.title.trim() ||
+      p.title === snapshot.title)
+  )
+    throw fail("Invalid proposed title");
   if (!Array.isArray(issue.evidence) || typeof issue.limits !== "string")
     throw fail("Missing evidence or limits");
   validateRelationships(issue);
