@@ -62,7 +62,7 @@ Propose a comment only when it adds information useful to the discussion: new ev
 
 For an obvious related issue or prerequisite that needs no explanation, propose only the native relationship and **Comment: none**. A relationship that needs scope, uncertainty, or disposition explained may also warrant a short comment. PRs and source references remain evidence; they are not issue relationships.
 
-Keep GitHub comments short and straight to the point: usually one short paragraph stating the finding or decision, with only the evidence links or remaining work needed to understand it. Omit agent-assistance and operator-review attribution. Avoid repeating the issue, procedural narration, and promises to implement fixes. Use immutable source links where useful; include related references only when they explain the conclusion or remaining work.
+Keep GitHub comments short and straight to the point: usually one short paragraph stating the finding or decision, with only the evidence links or remaining work needed to understand it. Omit agent-assistance and operator-review attribution. Avoid repeating the issue, procedural narration, and promises to implement fixes. State remaining gaps as remarks; ask a question only when its answer is needed to decide the issue. Use immutable source links where useful; include related references only when they explain the conclusion or remaining work.
 
 ## Retitle outdated issues
 

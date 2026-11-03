@@ -12,7 +12,7 @@ Choose connections supported by the investigation, rather than linking every iss
 
 Inspect installed `gh issue edit --help` and the live GraphQL schema if support is uncertain. `gh issue edit` supports `--add-blocked-by`, `--add-blocking`, their removal counterparts, parent and sub-issues. The tested CLI (2.102.0) lacks a relates-to flag; `gh api graphql` exposes `addRelatesTo` and `removeRelatesTo`. Live schema introspection and `viewerCanUpdateMetadata` establish capability without an unapproved test write.
 
-Read `relatesTo`, `blockedBy`, `blocking`, `parent`, and `subIssues` with GraphQL. Each connection needs `nodes { id url number title state }` and `pageInfo { hasNextPage endCursor }`; paginate until complete. Preserve canonical issue URLs in snapshots and proposals, using node IDs at mutation time. For cross-repository targets, resolve the actual issue and verify repository, number, state, and scope; PR IDs are not valid issue targets.
+Read `relatesTo`, `blockedBy`, `blocking`, `parent`, and `subIssues` with GraphQL. Each connection needs `nodes { id url number title state }` and `pageInfo { hasNextPage endCursor }`; paginate until complete. Preserve canonical issue URLs in snapshots and proposals, using node IDs at mutation time. For cross-repository targets, resolve the actual issue and verify repository, number, state, and scope; PR IDs are not valid issue targets. Relationship mutations need metadata permission on the target too: linking to an issue outside the organization, such as an upstream library bug, fails with a permission error. Check `viewerCanUpdateMetadata` on cross-repository targets before proposing a native link; cite inaccessible upstream issues as evidence or in a comment instead.
 
 ```graphql
 query {
