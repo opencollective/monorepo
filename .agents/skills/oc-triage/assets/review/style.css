@@ -99,6 +99,14 @@ article[data-decision="instructions"] .badge {
   padding-left: 20px;
   font-size: 13px;
 }
+.relationship-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .evidence li {
   margin: 7px 0;
 }

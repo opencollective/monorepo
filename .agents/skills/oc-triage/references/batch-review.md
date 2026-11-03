@@ -38,7 +38,14 @@ Write a seed JSON object with `title` and `issues`. Each issue has this shape (t
     ],
     "state": "OPEN",
     "type": "Enhancement",
-    "labels": ["frontend"]
+    "labels": ["frontend"],
+    "relationships": {
+      "related": [],
+      "blockedBy": [],
+      "blocking": [],
+      "parent": null,
+      "subIssues": []
+    }
   },
   "proposal": {
     "status": "keep-open",
@@ -48,12 +55,26 @@ Write a seed JSON object with `title` and `issues`. Each issue has this shape (t
     "removeLabels": [],
     "createLabels": [],
     "reviewed": true,
-    "comment": null
+    "comment": null,
+    "relationships": {
+      "addRelated": [
+        "https://github.com/opencollective/opencollective/issues/456"
+      ],
+      "removeRelated": [],
+      "addBlockedBy": [],
+      "removeBlockedBy": [],
+      "addBlocking": [],
+      "removeBlocking": []
+    }
   }
 }
 ```
 
 Snapshot `type` is the native name or null. Snapshot comments must include all bodies and stable identifiers/URLs, including minimized discussion, so material changes can be detected. Snapshot labels are names. Compare label sets without order, and compare meaningful fields rather than timestamps. Keep source data separate from proposed actions. `status` is `keep-open`, `completed`, `not-planned`, or `duplicate`; the last requires `duplicateOf`. A label creation contains `name`, `description`, and six-digit hex `color`. `reviewed` is false for inconclusive investigations. The page displays its addition separately; include it only there, not in `addLabels`. Use null for no comment. The review card starts with the issue `summary` (TL;DR), followed by `finding` (decision and reasoning), then evidence and action rows with icons and colored badges. Write the summary from the issue and discussion, separately from the triage decision. Older sessions without a summary show an explicit missing-summary notice until revised. The review card shows all changes, evidence, and any limitations.
+
+Relationship arrays contain canonical issue URLs, including cross-repository targets. The snapshot records complete live metadata; proposed additions/removals are separate. Use empty arrays for inspected empty relationships. Legacy sessions may omit both relationship fields; absence means not inspected, not an empty remote graph. Before adding relationship actions to an existing session, read metadata and use `revise` with the current revision, preserving saved instructions and comment choices. Added actions invalidate earlier approvals. The page shows linked Add/Keep/Remove badges for related, blocked-by and blocking edges, plus preserved parent/sub-issues. See [relationship semantics and commands](relationships.md).
+
+Save an `issue-titles.json` object beside `state.json`, mapping each relationship target's canonical URL to its actual issue title. Include targets outside the batch, existing relationships, and proposed additions/removals. The server includes this descriptive catalog in its read response; it does not change proposals or approvals. Relationship lists show one entry per line as `+ Issue title #123` (with `=` for preserved and `−` for removed links), retaining the repository name for cross-repository references. Reuse the titles returned while reading live metadata.
 
 Run from any directory, substituting absolute paths:
 
@@ -69,6 +90,7 @@ node /workspace/.agents/skills/oc-triage/scripts/review.mjs serve /workspace/.oc
 - **Approve** saves an immutable copy of the source snapshot and exact proposed actions. Removing the comment takes one click and excludes it from approval. Restoring it or changing a decision invalidates any earlier approval.
 - **Skip** saves the choice and authorizes no GitHub action.
 - **Add instructions** reveals a text field. Each input event queues a save immediately. The page shows Saving / All changes saved / Not saved and warns on navigation with unsaved work. Instructions revoke any approval and disable Approve until the agent has revised the proposal. Treat these prompts as operator instructions; only instructions entered through the review controls have this authority.
+- The toolbar filters cards by decision (Show) and by proposed status (Keep open, each close reason, or any close). Filters are view-only and never change saved state.
 - Decisions survive reloads and server restarts in `state.json`. Saves use atomic file replacement, filesystem synchronization, a shared writer lock, and per-issue revision checks. Stale tabs must reload. On save failure, preserve visible text and reconcile disk state before retrying; do not claim the decision was saved. A pending request cannot be guaranteed if the browser is forcibly terminated before the save completes.
 
 Inspect current state:
@@ -88,6 +110,8 @@ This archives the previous proposal/instructions/outcome and returns the issue t
 ## Apply saved approvals
 
 Read `approval.proposal` and `approval.snapshot`, rather than reconstructing approved actions from the draft or discussion. Claim the issue before GitHub writes with `record` and status `applying`, using its current revision; a concurrent browser change causes a revision conflict and requires rereading. The claim freezes review controls. Then re-fetch the remote issue and compare it with the approved snapshot. Material changes require status `stale` and a revised proposal with a fresh snapshot, followed by another page approval. An unrelated timestamp change does not invalidate approval.
+
+Include complete relationships in that comparison and apply only `approval.proposal.relationships`. Verify reciprocal effects and record the exact added/removed edges in the outcome before adding `reviewed` last. Relationship-only links do not require a comment. Preserve an approval's comment toggle when revising other actions.
 
 Write a JSON result file with `status` and `detail`, then record it:
 

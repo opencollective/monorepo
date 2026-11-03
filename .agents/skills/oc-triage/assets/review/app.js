@@ -1,4 +1,5 @@
 let state;
+let issueTitles = {};
 let queue = Promise.resolve();
 let saving = 0;
 let failed = false;
@@ -99,9 +100,18 @@ function render() {
   updateProgress();
   $("#issues").replaceChildren();
   const filter = $("#filter").value;
+  const statusFilter = $("#status-filter").value;
   for (const issue of state.issues) {
     const status = issue.outcome?.status || issue.decision;
     if (filter !== "all" && status !== filter) continue;
+    const proposed = issue.proposal.status;
+    if (
+      statusFilter !== "all" &&
+      (statusFilter === "close"
+        ? proposed === "keep-open"
+        : proposed !== statusFilter)
+    )
+      continue;
     const article = $("#card").content.firstElementChild.cloneNode(true);
     article.dataset.number = issue.number;
     const anchor = article.querySelector(".issue-link");
@@ -229,6 +239,57 @@ function render() {
       tr.append(th, td);
       article.querySelector("tbody").append(tr);
     }
+    const existing = issue.snapshot.relationships;
+    const changes = p.relationships;
+    for (const [label, key, kind] of [
+      ["Related issues", "related", "Related"],
+      ["Blocked by", "blockedBy", "BlockedBy"],
+      ["Blocks", "blocking", "Blocking"],
+      ["Parent", "parent", null],
+      ["Sub-issues", "subIssues", null],
+    ]) {
+      if (!kind && !existing?.[key]?.length) continue;
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.scope = "row";
+      th.textContent = label;
+      const td = document.createElement("td");
+      const removed = changes?.[`remove${kind}`] || [];
+      const urls =
+        key === "parent" ? [existing?.parent] : existing?.[key] || [];
+      const entries = urls.filter(Boolean).map((url) => ({
+        url,
+        action: removed.includes(url) ? "Remove" : "Keep",
+      }));
+      for (const url of changes?.[`add${kind}`] || [])
+        entries.push({ url, action: "Add" });
+      if (!entries.length) td.textContent = existing ? "None" : "Not inspected";
+      const list = document.createElement("ul");
+      list.className = "relationship-list";
+      for (const { url, action } of entries) {
+        const item = document.createElement("li");
+        const a = document.createElement("a");
+        const match = url.match(
+          /github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)$/,
+        );
+        const name = match
+          ? `${match[1] === "opencollective" && match[2] === "opencollective" ? "" : `${match[1]}/${match[2]}`}#${match[3]}`
+          : url;
+        const title = issueTitles[url];
+        a.textContent = `${{ Add: "+", Keep: "=", Remove: "−" }[action]} ${title ? `${title} ${name}` : name}`;
+        a.setAttribute("aria-label", `${action}: ${title || "Issue"} ${name}`);
+        a.title = `${action} relationship`;
+        a.className = `value-badge tone-${{ Add: "success", Keep: "neutral", Remove: "danger" }[action]}`;
+        safeLink(a, url);
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        item.append(a);
+        list.append(item);
+      }
+      if (entries.length) td.append(list);
+      tr.append(th, td);
+      article.querySelector("tbody").append(tr);
+    }
     article
       .querySelector(".comment")
       .classList.toggle("removed", !issue.includeComment);
@@ -272,6 +333,7 @@ async function refresh() {
     const result = await response.json();
     // A user may start typing while the refresh request is in flight.
     if (saving || document.activeElement?.tagName === "TEXTAREA") return;
+    if (result.issueTitles) issueTitles = result.issueTitles;
     if (JSON.stringify(state) !== JSON.stringify(result)) {
       state = result;
       render();
@@ -282,7 +344,7 @@ async function refresh() {
     showError(`${error.message}. Reconnecting…`);
   }
 }
-$("#filter").onchange = () => {
+$("#filter").onchange = $("#status-filter").onchange = () => {
   if (state) render();
 };
 window.addEventListener("beforeunload", (event) => {

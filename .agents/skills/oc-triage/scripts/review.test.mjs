@@ -70,6 +70,106 @@ test("removing a comment changes only the approved subset and survives reload", 
   assert.equal(saved.includeComment, false);
 });
 
+test("relationship approvals are exact and revisions revoke earlier approval without restoring a removed comment", (t) => {
+  const { file, issue } = fixture(t);
+  decide(file, 1, 1, "comment", false);
+  decide(file, 1, 2, "approve");
+  const relationships = {
+    related: [],
+    blockedBy: [],
+    blocking: [],
+    parent: null,
+    subIssues: [],
+  };
+  const changes = {
+    addRelated: ["https://github.com/opencollective/opencollective/issues/2"],
+    removeRelated: [],
+    addBlockedBy: [
+      "https://github.com/opencollective/opencollective-api/issues/3",
+    ],
+    removeBlockedBy: [],
+    addBlocking: [],
+    removeBlocking: [],
+  };
+  revise(file, 1, 3, {
+    ...issue,
+    snapshot: { ...issue.snapshot, relationships },
+    proposal: { ...issue.proposal, relationships: changes },
+  });
+  const revised = readState(file).issues[0];
+  assert.equal(revised.approval, null);
+  assert.equal(revised.decision, "pending");
+  assert.equal(revised.includeComment, false);
+  assert.ok(revised.history[0].approval);
+  decide(file, 1, 4, "approve");
+  const saved = readState(file).issues[0].approval;
+  assert.deepEqual(saved.snapshot.relationships, relationships);
+  assert.deepEqual(saved.proposal.relationships, changes);
+  assert.equal(saved.proposal.comment, null);
+});
+
+test("relationship changes reject self-links, PR links, conflicting edits and unread snapshots", (t) => {
+  const { file, issue } = fixture(t);
+  const relationships = {
+    related: [],
+    blockedBy: [],
+    blocking: [],
+    parent: null,
+    subIssues: [],
+  };
+  const changes = {
+    addRelated: [],
+    removeRelated: [],
+    addBlockedBy: [],
+    removeBlockedBy: [],
+    addBlocking: [],
+    removeBlocking: [],
+  };
+  for (const url of [
+    issue.url,
+    "https://github.com/opencollective/opencollective/pull/2",
+  ]) {
+    assert.throws(
+      () =>
+        revise(file, 1, 1, {
+          ...issue,
+          snapshot: { ...issue.snapshot, relationships },
+          proposal: {
+            ...issue.proposal,
+            relationships: { ...changes, addRelated: [url] },
+          },
+        }),
+      /Invalid relationship/,
+    );
+  }
+  const url = "https://github.com/opencollective/opencollective/issues/2";
+  assert.throws(
+    () =>
+      revise(file, 1, 1, {
+        ...issue,
+        snapshot: { ...issue.snapshot, relationships },
+        proposal: {
+          ...issue.proposal,
+          relationships: {
+            ...changes,
+            addRelated: [url],
+            removeRelated: [url],
+          },
+        },
+      }),
+    /Invalid relationship/,
+  );
+  assert.throws(
+    () =>
+      revise(file, 1, 1, {
+        ...issue,
+        proposal: { ...issue.proposal, relationships: changes },
+      }),
+    /Missing relationship snapshot/,
+  );
+  assert.equal(readState(file).issues[0].revision, 1);
+});
+
 test("instructions invalidate approval, persist per keystroke, and require a revised proposal", (t) => {
   const { file, issue } = fixture(t);
   decide(file, 1, 1, "approve");

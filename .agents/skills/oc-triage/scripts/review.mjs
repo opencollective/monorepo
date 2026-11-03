@@ -10,6 +10,41 @@ const clone = (value) => structuredClone(value);
 const fail = (message, status = 400) =>
   Object.assign(new Error(message), { status });
 
+function validateRelationships(issue) {
+  const valid = (url) =>
+    typeof url === "string" &&
+    /^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/[1-9]\d*$/.test(url) &&
+    url !== issue.url;
+  const list = (values) =>
+    Array.isArray(values) &&
+    values.every(valid) &&
+    new Set(values).size === values.length;
+  const snapshot = issue.snapshot.relationships;
+  if (snapshot !== undefined) {
+    if (
+      !snapshot ||
+      !["related", "blockedBy", "blocking", "subIssues"].every((key) =>
+        list(snapshot[key]),
+      ) ||
+      !(snapshot.parent === null || valid(snapshot.parent))
+    )
+      throw fail("Invalid relationship snapshot");
+  }
+  const proposal = issue.proposal.relationships;
+  if (proposal === undefined) return; // Existing sessions remain readable.
+  if (!snapshot || !proposal) throw fail("Missing relationship snapshot");
+  for (const kind of ["Related", "BlockedBy", "Blocking"]) {
+    const additions = proposal[`add${kind}`];
+    const removals = proposal[`remove${kind}`];
+    if (
+      !list(additions) ||
+      !list(removals) ||
+      additions.some((url) => removals.includes(url))
+    )
+      throw fail("Invalid relationship changes");
+  }
+}
+
 function validateIssue(issue) {
   if (!Number.isSafeInteger(issue.number) || issue.number < 1)
     throw fail("Invalid issue number");
@@ -65,6 +100,7 @@ function validateIssue(issue) {
   }
   if (!Array.isArray(issue.evidence) || typeof issue.limits !== "string")
     throw fail("Missing evidence or limits");
+  validateRelationships(issue);
 }
 
 function atomicWrite(file, value) {
@@ -278,8 +314,19 @@ export function createReviewServer(file) {
     };
     try {
       const url = new URL(req.url, "http://localhost");
-      if (req.method === "GET" && url.pathname === "/api/state")
-        return send(200, readState(file));
+      if (req.method === "GET" && url.pathname === "/api/state") {
+        const state = readState(file);
+        const titlesFile = path.join(path.dirname(file), "issue-titles.json");
+        const issueTitles = Object.fromEntries(
+          state.issues.map((issue) => [issue.url, issue.title]),
+        );
+        if (fs.existsSync(titlesFile))
+          Object.assign(
+            issueTitles,
+            JSON.parse(fs.readFileSync(titlesFile, "utf8")),
+          );
+        return send(200, { ...state, issueTitles });
+      }
       if (req.method === "POST" && url.pathname === "/api/decision") {
         // JSON plus same-origin requests prevents other sites submitting local decisions.
         if (
