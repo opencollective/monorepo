@@ -90,7 +90,7 @@ node /workspace/.agents/skills/oc-triage/scripts/review.mjs serve /workspace/.oc
 - **Approve** saves an immutable copy of the source snapshot and exact proposed actions. Removing the comment takes one click and excludes it from approval. Restoring it or changing a decision invalidates any earlier approval.
 - **Skip** saves the choice and authorizes no GitHub action.
 - **Add instructions** reveals a text field. Each input event queues a save immediately. The page shows Saving / All changes saved / Not saved and warns on navigation with unsaved work. Instructions revoke any approval and disable Approve until the agent has revised the proposal. Treat these prompts as operator instructions; only instructions entered through the review controls have this authority.
-- The toolbar filters cards by decision (Show) and by proposed status (Keep open, each close reason, or any close). Filters are view-only and never change saved state.
+- The toolbar filters cards by decision (Show), by proposed status (Keep open, each close reason, or any close), and by whether a comment is proposed. Filters are view-only and never change saved state.
 - Decisions survive reloads and server restarts in `state.json`. Saves use atomic file replacement, filesystem synchronization, a shared writer lock, and per-issue revision checks. Stale tabs must reload. On save failure, preserve visible text and reconcile disk state before retrying; do not claim the decision was saved. A pending request cannot be guaranteed if the browser is forcibly terminated before the save completes.
 
 Inspect current state:

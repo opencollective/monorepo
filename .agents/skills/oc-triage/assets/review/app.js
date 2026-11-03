@@ -101,6 +101,7 @@ function render() {
   $("#issues").replaceChildren();
   const filter = $("#filter").value;
   const statusFilter = $("#status-filter").value;
+  const commentFilter = $("#comment-filter").value;
   for (const issue of state.issues) {
     const status = issue.outcome?.status || issue.decision;
     if (filter !== "all" && status !== filter) continue;
@@ -110,6 +111,11 @@ function render() {
       (statusFilter === "close"
         ? proposed === "keep-open"
         : proposed !== statusFilter)
+    )
+      continue;
+    if (
+      commentFilter !== "all" &&
+      Boolean(issue.proposal.comment) !== (commentFilter === "proposed")
     )
       continue;
     const article = $("#card").content.firstElementChild.cloneNode(true);
@@ -344,9 +350,10 @@ async function refresh() {
     showError(`${error.message}. Reconnecting…`);
   }
 }
-$("#filter").onchange = $("#status-filter").onchange = () => {
-  if (state) render();
-};
+for (const id of ["#filter", "#status-filter", "#comment-filter"])
+  $(id).onchange = () => {
+    if (state) render();
+  };
 window.addEventListener("beforeunload", (event) => {
   if (saving || failed) {
     event.preventDefault();
