@@ -58,7 +58,7 @@ Start **one sub-agent per non-clean PR**, in the background, all in a single mes
 Brief each sub-agent (or revived session) with:
 
 - the PR's snapshot from step 1 and its triage actions and escalation flags from step 2
-- its worktree path (`/workspace/.worktrees/pr-<number>/<repo>`) and the instruction to read that repo's `AGENTS.md`
+- its worktree path (`/workspace/.worktrees/<repo>/pr-<number>`) and the instruction to read that repo's `AGENTS.md`
 - a pointer to this file: it owns steps 3 to 6 for this one PR, including the escalation rules in step 2
 - any operator instructions that apply to the PR
 
