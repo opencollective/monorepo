@@ -50,12 +50,27 @@
             <option value="none">No comment</option>
           </select></label
         >
+        <button id="approve-all" type="button" disabled>
+          Approve all shown
+        </button>
         <span id="progress"></span>
         <span id="save" role="status" aria-live="polite">Loading…</span>
       </div>
       <p id="error" role="alert" hidden></p>
     </header>
     <main id="issues"></main>
+    <dialog id="approve-all-dialog" aria-labelledby="approve-all-heading">
+      <form method="dialog">
+        <h2 id="approve-all-heading">Approve shown issues</h2>
+        <p id="approve-all-count"></p>
+        <p id="approve-all-skipped" class="hint" hidden></p>
+        <ul id="approve-all-list"></ul>
+        <div class="actions">
+          <button value="confirm">Approve all</button
+          ><button value="cancel" class="secondary" autofocus>Cancel</button>
+        </div>
+      </form>
+    </dialog>
     <template id="card">
       <article>
         <div class="card-top">

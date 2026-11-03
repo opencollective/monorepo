@@ -47,6 +47,7 @@ function submit(number, action, value, rerender = true) {
     })
     .catch((error) => {
       failed = true;
+      updateBulk();
       showError(
         `${error.message} Your text is still visible; copy it before reloading.`,
       );
@@ -56,10 +57,44 @@ function submit(number, action, value, rerender = true) {
       if (!saving && !failed) {
         $("#save").textContent = "All changes saved";
         updateProgress();
+        updateBulk();
         for (const article of document.querySelectorAll("article"))
           updateStatus(article);
       }
     });
+}
+
+function isVisible(issue) {
+  const filter = $("#filter").value;
+  const statusFilter = $("#status-filter").value;
+  const commentFilter = $("#comment-filter").value;
+  const status = issue.outcome?.status || issue.decision;
+  if (filter !== "all" && status !== filter) return false;
+  const proposed = issue.proposal.status;
+  if (
+    statusFilter !== "all" &&
+    (statusFilter === "close"
+      ? proposed === "keep-open"
+      : proposed !== statusFilter)
+  )
+    return false;
+  return (
+    commentFilter === "all" ||
+    Boolean(issue.proposal.comment) === (commentFilter === "proposed")
+  );
+}
+
+// Same rule as each card's Approve button.
+const canApprove = (issue) =>
+  !issue.outcome && !issue.needsRevision && issue.decision !== "approved";
+
+const bulkTargets = () =>
+  state.issues.filter((issue) => isVisible(issue) && canApprove(issue));
+
+function updateBulk() {
+  const count = bulkTargets().length;
+  $("#approve-all").textContent = `Approve all shown (${count})`;
+  $("#approve-all").disabled = !count || failed;
 }
 
 function updateProgress() {
@@ -98,26 +133,10 @@ function updateStatus(article) {
 function render() {
   $("#title").textContent = state.title;
   updateProgress();
+  updateBulk();
   $("#issues").replaceChildren();
-  const filter = $("#filter").value;
-  const statusFilter = $("#status-filter").value;
-  const commentFilter = $("#comment-filter").value;
   for (const issue of state.issues) {
-    const status = issue.outcome?.status || issue.decision;
-    if (filter !== "all" && status !== filter) continue;
-    const proposed = issue.proposal.status;
-    if (
-      statusFilter !== "all" &&
-      (statusFilter === "close"
-        ? proposed === "keep-open"
-        : proposed !== statusFilter)
-    )
-      continue;
-    if (
-      commentFilter !== "all" &&
-      Boolean(issue.proposal.comment) !== (commentFilter === "proposed")
-    )
-      continue;
+    if (!isVisible(issue)) continue;
     const article = $("#card").content.firstElementChild.cloneNode(true);
     article.dataset.number = issue.number;
     const anchor = article.querySelector(".issue-link");
@@ -354,6 +373,36 @@ for (const id of ["#filter", "#status-filter", "#comment-filter"])
   $(id).onchange = () => {
     if (state) render();
   };
+$("#approve-all").onclick = () => {
+  const targets = bulkTargets();
+  if (!targets.length) return;
+  const skipped = targets.filter((issue) => issue.decision === "skipped");
+  $("#approve-all-count").textContent =
+    `Approve ${targets.length} issue${targets.length === 1 ? "" : "s"} matching the current filters? Each saves the exact proposal shown, including any comment you have not removed.`;
+  $("#approve-all-skipped").hidden = !skipped.length;
+  $("#approve-all-skipped").textContent =
+    `${skipped.length} of them ${skipped.length === 1 ? "is" : "are"} currently skipped and will become approved.`;
+  const list = $("#approve-all-list");
+  list.replaceChildren();
+  for (const issue of targets) {
+    const li = document.createElement("li");
+    li.textContent = `#${issue.number} · ${issue.title}`;
+    list.append(li);
+  }
+  $("#approve-all-dialog").dataset.numbers = targets
+    .map((issue) => issue.number)
+    .join(",");
+  $("#approve-all-dialog").returnValue = "";
+  $("#approve-all-dialog").showModal();
+};
+$("#approve-all-dialog").onclose = () => {
+  const dialog = $("#approve-all-dialog");
+  if (dialog.returnValue !== "confirm") return;
+  // Approve only what was confirmed and is still shown and approvable now.
+  const confirmed = new Set(dialog.dataset.numbers.split(",").map(Number));
+  for (const issue of bulkTargets())
+    if (confirmed.has(issue.number)) submit(issue.number, "approve");
+};
 window.addEventListener("beforeunload", (event) => {
   if (saving || failed) {
     event.preventDefault();

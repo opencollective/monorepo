@@ -282,3 +282,22 @@ textarea {
 .status-row .value-badge {
   border: 1px solid currentColor;
 }
+dialog {
+  max-width: 560px;
+  border: 1px solid #ced8e8;
+  border-radius: 12px;
+  padding: 24px;
+}
+dialog::backdrop {
+  background: rgb(20 30 50 / 40%);
+}
+dialog h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+#approve-all-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-left: 20px;
+  font-size: 13px;
+}
