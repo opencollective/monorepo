@@ -252,6 +252,9 @@ of closing on Renovate's future proposals. Re-check dated ecosystem notes before
 TIMEOUT_MIN=45 bash "$SK/scripts/wait-checks.sh" api 12198 12199
 ```
 
+In the background, redirect to a log and echo the exit code (`… > "$S/wait.log" 2>&1; echo "exit $?"`):
+piped through `tail`, the task reports tail's exit 0 even when a PR is RED.
+
 Start with a short tool yield and continue the process while keeping the user informed. Exit 0
 means all watched PRs are green, 1 means completed checks include failures, 2 means timeout or
 invalid configuration. The helper rechecks every PR on every poll, including heads that changed.
@@ -298,8 +301,12 @@ bash "$SK/scripts/ai-review.sh" rest --worktree "$S/wt-rest-671" "Hyperwatch v5"
 bash "$SK/scripts/ai-review.sh" api --resolve <thread-id>  # after a fix is committed for that thread; never a comment
 ```
 
-- Codex and CodeRabbit review api and frontend PRs on every push. On images and rest the Codex connector reviews only
+- Codex and CodeRabbit usually review api and frontend PRs on every push. On images and rest the Codex connector reviews only
   when someone comments `@codex review` (the user posts it, not the agent); read its threads with `ai-review.sh`. Otherwise PRs get the local `codex review` in a worktree of the PR head. Unpushed fixes always get the local review.
+  Not every push gets a bot review: after the force-push of api #12339 (the user's own branch) neither bot reviewed the
+  new head, and CodeRabbit skips bot PRs ("skip review" comment, api #12414). `ai-review.sh` ends with a coverage line;
+  "no bot review or verdict on this head" means run the local review on that head, or, for a diff limited to
+  `package.json` and the lockfile, `AI review: none (no code change)`. Never "no findings" without a reviewer.
 - Each finding is either **integrated** (commit on the branch, rerun the checks, resolve the thread) or
   **dismissed** with a one-line reason. Nothing is left unanswered, nothing is posted as a comment.
 - The batch line carries both outcomes: `Own review: breaking changes N/A (no cy.exec, 2 Cypress.env calls migrated);
@@ -320,8 +327,9 @@ unaddressed finding, or without its own review, is not a merge candidate yet.
   not prove a review ran: verify the reviewed SHA and report missing or incomplete coverage.
   `ai-review.sh --worktree` exits 2 when Codex stops early (usage limit, interruption): the batch line
   then says `AI review: pending (Codex limit until <time>)`, never `none`. If the configured model is refused
-  ("model is not supported when using Codex with a ChatGPT account"), stop and ask the user: never switch
-  to another model (`CODEX_MODEL`) on your own, other models can cost much more. Do not edit `~/.codex/config.toml`.
+  ("model is not supported when using Codex with a ChatGPT account"), use the fallback the user already
+  approved (`CODEX_MODEL=<model>`, e.g. from their memory or instructions); without one, stop and ask: never pick
+  another model on your own, other models can cost much more. Do not edit `~/.codex/config.toml`.
 - Resolve GitHub threads only within existing authorization, after the fix is pushed and verified.
   A local commit alone does not resolve the PR finding.
 - The routine for "check feedback" on a PR (what the user calls "the usual"): read the open threads

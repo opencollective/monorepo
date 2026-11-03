@@ -167,6 +167,25 @@ sys.exit(r.returncode)
         self.assertIn('current finding', result.stdout)
         self.assertNotIn('obsolete finding', result.stdout)
 
+    def test_ai_review_reports_codex_verdict_comment_as_coverage(self):
+        head = '7223bd9682cf5d2def3d50a3a2dd9b48225f5cc7'
+        value = {'headRefOid': head, 'reviewThreads': {'nodes': []}, 'reviews': {'nodes': []},
+                 'comments': {'nodes': [{'author': {'login': 'chatgpt-codex-connector'},
+                                         'body': "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `7223bd9682`"}]}}
+        result = self.call('ai-review.sh', {'graphql': {'data': {'repository': {'pullRequest': value}}}}, '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('reviewed by: chatgpt-codex-connector', result.stdout)
+
+    def test_ai_review_flags_head_without_bot_review(self):
+        value = {'headRefOid': '4799cb84196fd5292b09a4ecb23f8af8d5233e87', 'reviewThreads': {'nodes': []},
+                 'reviews': {'nodes': [{'author': {'login': 'coderabbit'}, 'state': 'COMMENTED',
+                                        'commit': {'oid': 'old-head'}, 'body': 'old'}]},
+                 'comments': {'nodes': [{'author': {'login': 'chatgpt-codex-connector'},
+                                         'body': '**Reviewed commit:** `7223bd9682`'}]}}
+        result = self.call('ai-review.sh', {'graphql': {'data': {'repository': {'pullRequest': value}}}}, '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('no bot review or verdict on this head', result.stdout)
+
     def test_ai_review_lists_sentry_threads(self):
         value = {'headRefOid': 'head', 'reviews': {'nodes': []}, 'reviewThreads': {'nodes': [
             {'id': 'T1', 'isResolved': False, 'isOutdated': False, 'path': 'a.ts', 'line': 3,

@@ -52,7 +52,8 @@ case "${1:-}" in
     pr="${1:?pr number}"
     gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){headRefOid
       reviewThreads(first:100){pageInfo{hasNextPage} nodes{id isResolved isOutdated path line comments(first:1){nodes{author{login} body}}}}
-      reviews(last:50){pageInfo{hasPreviousPage} nodes{author{login} state commit{oid} body}}}}}' \
+      reviews(last:50){pageInfo{hasPreviousPage} nodes{author{login} state commit{oid} body}}
+      comments(last:50){nodes{author{login} body}}}}}' \
       -f o="${REPO%/*}" -f r="${REPO#*/}" -F n="$pr" > "$review_json"
     head=$(jq -r .data.repository.pullRequest.headRefOid "$review_json")
     if jq -e '.data.repository.pullRequest | .reviewThreads.pageInfo.hasNextPage or .reviews.pageInfo.hasPreviousPage' "$review_json" >/dev/null; then
@@ -67,5 +68,16 @@ case "${1:-}" in
     echo "== bot review bodies on the head commit (CodeRabbit nitpicks live here, not in threads) =="
     jq -r --arg bots "$BOTS" --arg h "$head" '.data.repository.pullRequest.reviews.nodes[] | select(.author.login | test($bots; "i")) | select(.commit.oid == $h) | "\(.author.login) \(.state)\t\(.body | gsub("[\\r\\n]+"; " "))"' "$review_json" \
       | while IFS=$'\t' read -r who body; do printf "%s: %s\n" "$who" "$(strip <<<"$body" | cut -c1-900)"; done
-    echo "(bodies from older commits are omitted: re-review happens on every push)" ;;
+    echo "(bodies from older commits are omitted)"
+    # Empty sections are not a clean review: say which bots reviewed this head. Codex's no-findings verdict is a
+    # PR comment ("Reviewed commit: `<sha>`"), not a review; api #12339 got none after a force-push (2026-11-03)
+    echo "== coverage of ${head:0:8} =="
+    covered=$(jq -r --arg bots "$BOTS" --arg h "$head" '.data.repository.pullRequest
+      | ([.reviews.nodes[] | select(.author.login | test($bots; "i")) | select(.commit.oid == $h) | .author.login]
+         + [(.comments.nodes // [])[] | select(.author.login | test($bots; "i"))
+            | (.body | capture("Reviewed commit:\\**\\s*`(?<sha>[0-9a-f]{7,40})`")? | .sha) as $s
+            | select($s != null and ($h | startswith($s))) | .author.login])
+      | unique | join(", ")' "$review_json")
+    if [[ -n "$covered" ]]; then echo "reviewed by: $covered"
+    else echo "no bot review or verdict on this head (CodeRabbit skips bot PRs): run --worktree on a checkout of it, or report AI review: none (no code change) for a package.json + lockfile diff"; fi ;;
 esac
