@@ -36,6 +36,8 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 
 **Quality:** From the repo subfolder, run that repo's TypeScript, ESLint, and Prettier scripts (see its `AGENTS.md`). Must pass before handoff. Repeat in every touched repo.
 
+**PRs:** After opening a PR, run the `oc-maintain-prs` skill on it and keep iterating until the PR is fully green.
+
 **Tests:** `./scripts/test.sh <file>` (`--watch` supported). Auto-detects the runner.
 
 **Manual:** `./scripts/run.sh` then http://localhost:3000 as `testuser+admin@opencollective.com` (no password).
