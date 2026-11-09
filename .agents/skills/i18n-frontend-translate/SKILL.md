@@ -70,7 +70,7 @@ Use when the English line alone is ambiguous (button vs heading, legal vs casual
 
 - For duplicate or generic English, context disambiguates (e.g. "Order" as noun vs verb).
 
-- To compare with other languages or `en.json`, see [.agents/skills/search-i18n-translations/SKILL.md](../search-i18n-translations/SKILL.md).
+- To compare with other languages or `en.json`, see [.agents/skills/i18n-frontend-search-translations/SKILL.md](../i18n-frontend-search-translations/SKILL.md).
 
 ## Preservation rules
 

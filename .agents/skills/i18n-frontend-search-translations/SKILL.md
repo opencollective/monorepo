@@ -1,5 +1,5 @@
 ---
-name: search-i18n-translations
+name: i18n-frontend-search-translations
 description: Finds existing frontend translations in lang/en.json. Use when adding UI text or searching for reusable strings.
 ---
 
