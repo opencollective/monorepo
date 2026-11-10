@@ -47,3 +47,5 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 ## Security
 
 Triage: `.agents/skills/security-investigate-issue` (internal), `security-investigate-report`. Known-safe patterns: `.agents/skills/review-feature-security`. **Not defects:** public GraphQL introspection, permissive API CORS.
+
+On the API: If a PR has a security aspect (permissions, auth, 2FA, OAuth scopes, private accounts, payments, user input handling, or a security fix), add the `security` label to it. The label triggers automated security reviews.
