@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open Collective performance"
+  short_description: "Reproduce a slow domain on production-scale data, find the cause by measurement, ship one PR per fix with before/after timings"
+  default_prompt: "Run oc-performance-improve on the domain I name. Reproduce the slowness first and show me the baseline, the causes and the prototyped fixes with their measured gain before opening any PR."
