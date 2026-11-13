@@ -1,4 +1,4 @@
 interface:
   display_name: "Open Collective bug hunt"
-  short_description: "Find and prove bugs in a service, starting with payments, auth, expenses and members, then file issues"
-  default_prompt: "Run oc-find-bugs on opencollective-api. With no focus, start with the critical-path cores. Show every confirmed bug with its proposed destination (public issues or opencollective-security) and wait for my approval before filing."
+  short_description: "Find and prove bugs in a service, starting with payments, auth, expenses and members, then fix small ones and file issues for the rest"
+  default_prompt: "Run oc-find-bugs on opencollective-api. With no focus, start with the critical-path cores. Show every confirmed bug routed to a direct fix or an issue (public or opencollective-security) and wait for my approval before fixing or filing."
