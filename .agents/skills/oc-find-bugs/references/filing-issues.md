@@ -1,6 +1,6 @@
 # Filing confirmed bugs
 
-Applies only to bugs the operator approved in step 5, with their approved destination and edits. Use `gh` with an explicit `--repo` on every command. Write each body to a file under `priv/find-bugs/<run-id>/issues/` and pass `--body-file`.
+Applies only to bugs the operator approved for an issue in step 5, with their approved destination and edits. Use `gh` with an explicit `--repo` on every command. Write each body to a file under `priv/find-bugs/<run-id>/issues/` and pass `--body-file`.
 
 ## Dedup first
 
