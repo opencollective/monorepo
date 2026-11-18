@@ -38,6 +38,8 @@ Services talk via GraphQL. After API schema changes, update consumer copies with
 
 **PRs:** After opening a PR, run the `oc-maintain-prs` skill on it and keep iterating until the PR is fully green.
 
+**Screenshots and videos on GitHub:** You can attach them yourself, so do not tell the user it is impossible. `gh` v2.99.0+ uploads local images and videos with the repeatable `--attach` flag on `gh pr create|edit|comment` and `gh issue create|edit|comment`. Example: `gh pr create ... --attach ./before.png --attach ./after.png`. If the body already references the local path (`![After](./after.png)`), `gh` replaces it with the uploaded URL; otherwise it appends the file. Attach before/after screenshots to UI PRs (capture them with Playwright against `./scripts/run.sh`). If `gh --version` is older than 2.99, upgrade `gh` rather than skip the screenshots. See https://gh.io/gh-attach.
+
 **Tests:** `./scripts/test.sh <file>` (`--watch` supported). Auto-detects the runner.
 
 **Manual:** `./scripts/run.sh` then http://localhost:3000 as `testuser+admin@opencollective.com` (no password).
