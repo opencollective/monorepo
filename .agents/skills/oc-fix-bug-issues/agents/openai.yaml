@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open Collective bug fixes"
+  short_description: "Screen minimal or simple Bug issues with Haiku, fix each with an Opus or Sonnet agent that opens PRs and keeps them green"
+  default_prompt: "Run oc-fix-bug-issues on up to 10 well-understood minimal or simple Bug issues. Show me the picks, open PRs for the fixes, and wait for my approval before posting any closing comment."
