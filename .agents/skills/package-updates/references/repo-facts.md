@@ -1,18 +1,21 @@
 # Repo facts for package-update maintenance
 
-Historical observations from September and October 2026. Verify relevant settings in the current checkout
-and GitHub before acting; these notes do not grant authorization or override AGENTS.md.
+**Live facts come from the script**, not from this file: run
+`bash "$SK/scripts/repo-facts.sh" [repo ...]` for each repo's `.nvmrc`, `engines` (Node/npm),
+`renovate.json` rules, required status checks and `ci.yml` job names on the default branch.
+
+The rest is historical observation from September to November 2026. Verify relevant settings in the
+current checkout and GitHub before acting; these notes do not grant authorization or override AGENTS.md.
 
 All six repos (api, frontend, rest, images, pdf, contributors-svg) use Renovate (Mend app) with the shared preset
 `opencollective/renovate-config` (`local>` or `github>`) (`config:best-practices`, `:preserveSemverRanges`, schedule
 weekdays 02:00-06:00 UTC and weekends, no automerge, `minimumReleaseAge` from best-practices except
 `@opencollective/*`). Automerge is disabled by config and `allow_auto_merge` is off, so every merge
-is a human decision.
+is a human decision. Renovate PR anatomy and branch handling: `renovate.md`.
 
 **opencollective-rest** (`opencollective/opencollective-rest`, checkout `opencollective-rest/` or
-`~/Dev/opencollective/rest`): Node 24.x / npm 11.x, npm lockfile. CI jobs (`ci.yml`): lint,
-typescript, prettier, depcheck, test (Jest, no database, no e2e). Required checks: lint, prettier,
-test. Treat rest like api and frontend: batch review first, `merge.sh --approve`, never merge on green alone. Local quality:
+`~/Dev/opencollective/rest`): npm lockfile. Its `test` job is Jest, with no database and no e2e.
+Treat rest like api and frontend: batch review first, `merge.sh --approve`, never merge on green alone. Local quality:
 `npm run type:check`, `npm run lint:quiet`, `npm run prettier:check`, `npm run test`. It wraps the
 API's GraphQL (schema copies under `src/graphql/`), so an API schema change can break its tests.
 It embeds Hyperwatch like the API does (`src/server/lib/hyperwatch.js`); see `fixing.md` §4c.
@@ -22,12 +25,10 @@ the user comments `@codex review`. Jest tests call the live API configured
 in the env, not fixtures (see `failures.md`, "Flaky vs real" item 5).
 
 **opencollective-images** (`opencollective/opencollective-images`, checkout `opencollective-images/` or
-`~/Dev/opencollective/images`): Node 24.x / npm 11.x (`.nvmrc` = 24), npm lockfile, plain JavaScript
+`~/Dev/opencollective/images`): npm lockfile, plain JavaScript
 (Babel build, no `type:check`). Renovate **and** Dependabot both open PRs here, so the same bump can
 show up twice (image-size v2: Renovate #701 `[security]` and Dependabot #700); keep the Renovate one
-and close the duplicate in the batch. `renovate.json` on main disables `engines.npm` majors like api.
-CI jobs (`ci.yml`): lint, prettier, depcheck, test; plus `lockfile-lint.yml`. Required checks: lint,
-prettier, test. CodeQL also runs and its `CodeQL` check goes red on any _new_ alert in
+and close the duplicate in the batch. Besides `ci.yml` it runs `lockfile-lint.yml`. CodeQL also runs and its `CodeQL` check goes red on any _new_ alert in
 changed code; it is not required. The service fetches user-provided image URLs by design, so a PR
 that moves such a fetch to a new function can re-raise an existing `js/request-forgery` alert at the
 new location; compare with the alerts already on main before treating it as a new exposure. One approving review is required (same as api and frontend), auto-merge is off,
@@ -51,13 +52,13 @@ Apollo Client 4 (#654) returns GraphQL errors as `error` (CombinedGraphQLErrors)
 Check commit authors before requesting Renovate's rebase; compatibility commits require a local rebase.
 
 **opencollective-pdf** (`opencollective/opencollective-pdf`, checkout `opencollective-pdf/` or
-`~/Dev/opencollective/pdf`): Node 24.x / npm 11.x (`.nvmrc` = 24), npm lockfile, TypeScript (`tsc`
+`~/Dev/opencollective/pdf`): runs a newer Node major than the other repos since November 2026 (see
+`repo-facts.sh`; use `use_repo_node` from `_lib.sh`, Node 24 prints EBADENGINE there), npm lockfile, TypeScript (`tsc`
 build, `tsx` in dev). Older notes describing it as Next.js 12 / Node 18 are outdated:
 it is an Express 5 server rendering with `@react-pdf/renderer` and React 19, Apollo Client 3 and
 graphql 16. Renovate opens the version updates; Dependabot opens only security updates (no
 `dependabot.yml`), mostly transitive `build(deps)` / `build(deps-dev)` bumps, so the same package can
-appear in both. CI jobs (`ci.yml`): lint, prettier, typescript, test, check-tax-forms-config, depcheck;
-plus `lockfile-lint.yml` and CodeQL (`Analyze`). Required checks: lint, prettier, test. One approving
+appear in both. Besides `ci.yml` it runs `lockfile-lint.yml` and CodeQL (`Analyze`). One approving
 review is required, auto-merge is off, squash merge is allowed. Local quality: `npm run type:check`,
 `npm run lint`, `npm run prettier:check`, `npm run depcheck`, `npm test` (Vitest).
 The `test` job needs no API or database: `test/server/*` mock the GraphQL API with `nock` and compare
@@ -75,11 +76,11 @@ change): pdf-visual-diff 0.16 moved at most 52 edge pixels (pdf #1180). `test` a
 `fail_ci_if_error`, so a Codecov outage turns it red: an infra flake, rerun once.
 
 **contributors-svg** (`opencollective/contributors-svg`, checkout `~/Dev/opencollective/contributors-svg`,
-not in the monorepo; maintained since 2026-10-03): Node 24.x / npm 11.x (`.nvmrc` = 24, `engine-strict`,
-`legacy-peer-deps`), plain JavaScript compiled by Babel 8 (`"modules": "commonjs"`), Express 5,
+not in the monorepo; maintained since 2026-10-03): `engine-strict` and
+`legacy-peer-deps` in `.npmrc`, plain JavaScript compiled by Babel 8 (`"modules": "commonjs"`), Express 5,
 Hyperwatch 5 (`hyperwatch.app.mount`; off in production, and never runs without `HYPERWATCH_SECRET`
 once #125 merges), lru-cache 11 memory cache or Redis (`REDIS_URL`). The package-updates scripts
-cover it as `contributors-svg` (since 2026-10-09). CI (`ci.yml`): lint, prettier, test, build; plus
+cover it as `contributors-svg` (since 2026-10-09). Besides `ci.yml` it runs
 `lockfile-lint.yml`. `test` runs `node --test` against the **source** (`@babel/register`): the real
 server in a child process, controllers or GitHub stubbed by `--require` preloads, a Redis service for
 `test/cache-redis.test.js` (`TEST_REDIS_URL`). `build` starts the built server with production
@@ -129,35 +130,19 @@ on their api `npm ci`, whose postinstall would restore with the runner's 18 tool
 (api and frontend skip it with `OC_ENV: ci`). Dependabot PRs get only Dependabot secrets: api,
 frontend, rest and pdf have a Dependabot `CODECOV_TOKEN` (pdf #1306 failed its Codecov upload without it). api has no Dependabot `STRIPE_WEBHOOK_KEY` / `STRIPE_WEBHOOK_SIGNING_SECRET`: on a Dependabot-triggered run every `40-stripe-element-*` spec stays `NEW` and shard 4 hits its 30 min timeout (api #12291, 2026-10-10). A rerun keeps the Dependabot actor; a push from a maintainer (a local rebase) gets the repo secrets.
 
-|                             | opencollective-api                                                                                                   | opencollective-frontend                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| GitHub                      | `opencollective/opencollective-api`                                                                                  | `opencollective/opencollective-frontend`                                                            |
-| Local checkout (monorepo)   | `opencollective-api/`                                                                                                | `opencollective-frontend/`                                                                          |
-| Local checkout (outside)    | `~/Dev/opencollective/api`                                                                                           | `~/Dev/opencollective/frontend`                                                                     |
-| Node / npm                  | 24.x / 11.x (`.nvmrc` = 24, `engine-strict`)                                                                         | 24.x / 11.x                                                                                         |
-| Package manager             | npm, `package-lock.json`                                                                                             | npm, `package-lock.json`                                                                            |
-| CI workflow jobs (`ci.yml`) | lint, prettier, typescript, depcheck, ts-unused-exports, build, test, test-graphql, schema-update, graphql-inspector | lint, prettier, depcheck, ts-unused-exports, check-langs, build, test, typescript, e2e-prepare, e2e |
-| E2E                         | `e2e.yml` on push, 5 shards named `e2e (N*.(js\|ts))`                                                                | called from ci.yml, checks named `e2e / e2e (N*.(js\|ts))`                                          |
-| Other workflows             | lockfile-lint, CodeQL, CodeRabbit                                                                                    | lockfile-lint, CodeQL, CodeRabbit, i18n                                                             |
-| Required checks             | build, lint, prettier, test, test-graphql, typescript, e2e 0-4                                                       | check-langs, lint, prettier, test, build, e2e 0-3                                                   |
-| Local quality               | `npm run type:check`, `npm run lint:check`, `npm run prettier:check`                                                 | `npm run type:check`, `npm run lint:quiet`, `npm run prettier:check`                                |
-| Tests                       | Mocha (`npm run test`), needs Postgres                                                                               | Jest (`npm run test`), Cypress e2e                                                                  |
+|                           | opencollective-api                                                   | opencollective-frontend                                              |
+| ------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| GitHub                    | `opencollective/opencollective-api`                                  | `opencollective/opencollective-frontend`                             |
+| Local checkout (monorepo) | `opencollective-api/`                                                | `opencollective-frontend/`                                           |
+| Local checkout (outside)  | `~/Dev/opencollective/api`                                           | `~/Dev/opencollective/frontend`                                      |
+| Package manager           | npm, `package-lock.json`, `engine-strict`                            | npm, `package-lock.json`                                             |
+| E2E                       | `e2e.yml` on push, 5 shards named `e2e (N*.(js\|ts))`                | called from ci.yml, checks named `e2e / e2e (N*.(js\|ts))`           |
+| Other workflows           | lockfile-lint, CodeQL, CodeRabbit                                    | lockfile-lint, CodeQL, CodeRabbit, i18n                              |
+| Local quality             | `npm run type:check`, `npm run lint:check`, `npm run prettier:check` | `npm run type:check`, `npm run lint:quiet`, `npm run prettier:check` |
+| Tests                     | Mocha (`npm run test`), needs Postgres                               | Jest (`npm run test`), Cypress e2e                                   |
 
 Labels used by this skill in all six repos: `blocked` (`b60205`, with a "Blocked by …" comment) and
-`major` (`d93f0b`, a major of a critical dependency that only the user merges; api #11701 stripe v22
-is the first one).
-
-Renovate PR anatomy: branch `renovate/<slug>`, title `fix(deps): update dependency X to vN` /
-`chore(deps): update ...` / `chore(deps): lock file maintenance` (weekly).
-The body ends with `- [ ] <!-- rebase-check -->If you want to rebase/retry this PR, check this box`.
-Ticking it (editing the body to `[x]`) makes Renovate rebase onto main and force-push on its next
-run, which also retriggers CI. Renovate also sets two commit statuses of its own: `renovate/stability-days`
-(minimum release age) and `renovate/artifacts`, which fails when Renovate could not regenerate the
-lockfile in its sandbox; that failure has no CI run behind it, only an "Artifact update problem" comment. Renovate stops auto-rebasing a branch once someone else pushes to it (the branch is "modified").
-Ticking the box on a modified branch makes Renovate rebuild the branch from its own update, which
-drops the foreign commits. So: push a compat fix onto the Renovate branch only when the branch is
-already rebased on current main; if the branch later needs a rebase, do it locally
-(`git rebase origin/main` + `--force-with-lease`) rather than through the checkbox.
+`major` (`d93f0b`, a major of a critical dependency that only the user merges).
 
 Cross-repo coupling that bites package PRs:
 
@@ -165,18 +150,13 @@ Cross-repo coupling that bites package PRs:
   one exists, else frontend `main`. An orphaned `renovate/<same-slug>` branch on the other repo
   makes every e2e shard fail with GraphQL schema errors.
 - api, frontend and images install each other in E2E, so they must agree on the npm major.
-  `engines.npm` majors beyond what Node bundles are disabled in `renovate.json`; close such PRs.
+  `engines.npm` majors beyond what Node bundles are disabled in `renovate.json` (check with
+  `repo-facts.sh`); close such PRs.
 - Frontend `allowScripts` in package.json lists exact `name@version` for packages with install
   scripts (esbuild, canvas, cypress, @sentry/cli, unrs-resolver, sharp, @tailwindcss/oxide, husky).
   npm 12 silently skips a mismatched version's install script; npm 11 (local) ignores the list, so
   breakage is invisible locally. Sync the entries with the lockfile in any bump touching them.
 
-Branch protection: one approving review is required, and `gh pr merge` without it fails
-with "the base branch policy prohibits the merge". The user's account can approve bot PRs
-(`gh pr review --approve`), which `merge.sh --approve` does after the review batch. Nobody can
-approve their own PR. Use an existing qualifying review or report that another reviewer is needed;
-`merge.sh` never bypasses protection or recommends an administrative merge.
-
-Local environment: the non-interactive shell may pick Node 20 from nvm. Prefix with
-`use_node24` from `scripts/_lib.sh` (verify `node --version` and `npm --version`) before
-`npm ci`, `tsc` or tests.
+Branch protection: one approving review is required, and `gh pr merge` without it fails with "the
+base branch policy prohibits the merge". The user's account can approve bot PRs
+(`gh pr review --approve`), which `merge.sh --approve` does after the review batch.

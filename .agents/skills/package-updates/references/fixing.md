@@ -3,13 +3,44 @@
 Everything here prepares a concrete result. Push only within the user's existing authorization, or after approval.
 Prepare the fix fully (committed in a worktree, verified locally) so approval is a yes/no.
 
+## Fixer brief
+
+The orchestrator keeps the diagnosis of what needs fixing and claims the PR first (SKILL.md,
+Delegation). Brief the fixer with `SK`, `S`, the repo, PR, head SHA, the classification with the
+failing job and `failures.sh` summary (or the findings to integrate), and point it at this file, the
+allowed fixes in SKILL.md (Fixes) and the repo's AGENTS.md. The fixer:
+
+- works in a scratch worktree under `$S` (§3), never the user's checkout, and keeps to the allowed fixes;
+- disables hooks only for the scratch workflow, runs the repo's type, lint, format and the tests of
+  what it changed, and commits locally; it never pushes;
+- on api runs only the spec files it touched, never the full Mocha suite (CI runs the rest), under
+  the shared lock since API tests share the `opencollective_test` database:
+  `bash "$SK/scripts/with-lock.sh" api-test ./scripts/test.sh <file>` (macOS has no `flock`);
+- returns the root cause, the commit SHA, changed files, the verification commands with their
+  results, the worktree path, and anything it could not fix (an upstream bug, an ecosystem gate, a
+  change outside the allowed scope) with its evidence, instead of working around it.
+
+## Diagnosis notes
+
+- Lockfile maintenance: inspect transitive changes as well as package.json; an unchanged manifest can
+  still split a shared runtime registry across dependency versions (WebAuthn's `Cannot get schema
+  for 'ECDSASigValue' target`: the ASN.1 recipe in `failures.md`).
+- Green CI on a compat commit (a human's or an agent's) proves only what the tests exercise. When the
+  commit rewrites a matching surface (routes, parsers, schemas), diff the behaviour on the real input
+  matrix, old version against new, before calling it ready (Express 5 recipe, §4b).
+- To attribute a local failure to the bump, compare with `origin/main` under the same environment and
+  run the failing suite alone (rest's suites hit a live API and time out under a full run).
+- Record root cause, changed files, verification, worktree path, and destination for the batch.
+- For an upstream bug or ecosystem gate, explain the options (hold, fix, or close) and the effect of
+  closing on Renovate's future proposals. Re-check dated ecosystem notes (§6) before using them.
+
 ## 1. Understand the bump before touching code
 
 - What changed: `gh pr diff <n> -R $REPO | awk '/^diff --git/{p=($0 ~ /package\.json$/ && $0 !~ /package-lock/)} p && /^[-+] +"/'`.
 - Release notes Renovate embedded: `gh pr view <n> -R $REPO --json body -q .body | sed -n '/Release Notes/,/Configuration/p'`. Renovate only embeds the top range; for a multi-major jump (plaid 43→47, p-map 4→7) read **every intermediate major**: `gh api repos/<owner>/<repo>/releases/tags/v5.0.0 -q .body`, or the CHANGELOG via `gh api repos/<owner>/<repo>/contents/CHANGELOG.md -H 'Accept: application/vnd.github.raw'` (raw.githubusercontent sometimes returns empty).
 - Inventory our usage: `rg "<pkg>" server lib components pages scripts cron test` and the methods called. Cross every breaking change against that list. Grep for every `new <Sdk>(` construction, not just the shared lib (the Stripe cron client had its own `apiVersion`). stripe-node types `apiVersion` as the latest version literal only: an older pin needs `// @ts-expect-error stripe-version <version>` (as `server/lib/stripe.ts` does), and a file main converted to TypeScript since the PR opened needs it too after the rebase (api #12339, cron reconcile job after #12402, 2026-11-03).
 - Package facts: `npm view <pkg> versions dist-tags engines peerDependencies --json`, `npm view <pkg>@<ver> deprecated`. Inspect the real code/types instead of trusting bots: `npm pack <pkg>@<ver> --silent && tar xzf *.tgz` then grep `package/**/*.d.ts`.
-- ESM-only is **not** a blocker on Node 24 (`require(esm)` works; `get-urls`, `p-map`, `graphql-upload` all load from this CommonJS codebase). Native modules (`re2`, `lwip`) still are. No top-level `await` in the package graph.
+- ESM-only is **not** a blocker on Node 24 (`require(esm)` works; `get-urls`, `p-map`, `graphql-upload` all load from this CommonJS codebase). Native modules (`re2`, `lwip`) still are. No top-level `await` in the package graph. It still fails when `exports` offers only an `import` condition (no `default`, `require` or `node`): `require()` then stops with `No "exports" main defined`. Check with `npm view <pkg>@<ver> exports --json`. connect-redis 11 (api #12615, blocked) is the case: it needs a dynamic `import()` at the call site or an ESM API.
 - Upstream issues: `gh search issues --repo <owner>/<repo> "<error text>" --limit 5 --json number,title,state,url`. For an upstream bug without a fixed release, assess holding, a focused workaround, or closure. Closing requires authorization and an explanation of future bot proposals.
 
 For a major, also check the package's published shape against our imports, not just its notes:
@@ -182,7 +213,7 @@ built server. Fix by declaring the peer as a dependency. contributors-svg's CI `
 
 ## 4h. Lockfile maintenance review
 
-- Before merging, the branch must be built on current main (`rebase.sh`): GitHub's three-way squash of
+- Before merging, the branch must be built on current main (`cycle.sh rebase`): GitHub's three-way squash of
   an older base produces a lockfile CI never tested, and a diff against main shows apparent downgrades
   of packages main updated since (images #731, 2026-10-05).
 - List what changes against main at runtime:
