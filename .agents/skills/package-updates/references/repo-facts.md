@@ -100,6 +100,17 @@ so an org ruleset (unreadable without `admin:org`) most likely discounts approva
 pushed to a bot PR therefore needs another maintainer's approval, like the user's own PRs; say so in the push
 batch item, or land the fix on main as its own PR and let the bot rebase.
 
+**gh-aw releases are GitHub pre-releases** (2026-11-24). frontend's agentic workflows use
+`github/gh-aw-actions` (`setup@`, `setup-cli@`) in `.github/workflows/agentics-maintenance.yml` and the
+generated `i18n-translate-*.lock.yml`. Its tags are plain semver, so Renovate proposes them as stable,
+but v1.2.3 to v1.4.0 are all marked pre-release on GitHub (v1.2.2 is the latest stable), with breaking
+changes and "recompile before upgrading" in the notes. Before proposing a merge, check
+`gh release view <tag> -R github/gh-aw --json isPrerelease`. The `.lock.yml` files come from
+`gh aw compile` and still carry `GH_AW_VERSION` v1.0.1 (also pinned in `.github/aw/actions-lock.json`)
+while the action refs moved on: that is drift to recompile, not something a Renovate bump fixes. CI does
+not run these workflows. frontend #12731 (v1.3.1, a pre-release) was merged unnoticed on 2026-11-22;
+#12743 (v1.4.0) was closed.
+
 **Node Docker images carry no digest** (2026-10-15). Nothing builds the Dockerfiles of rest, images or
 frontend: Heroku deploys with the `heroku/nodejs` buildpack, and the devcontainer uses its own image. Digest
 PRs for `node` were noise, so renovate-config #6 sets `pinDigests: false` for `node`, and rest #800,

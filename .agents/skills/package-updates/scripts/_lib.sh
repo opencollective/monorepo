@@ -31,6 +31,17 @@ resolve_repo() {
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 2; }; }
 need gh; need jq
 
+# gh 2.105 prints a 7-line "hint: ... gh event listen" block on stderr after `gh pr view` and
+# similar commands, with no setting to turn it off. It pushed status.sh past bounded output and
+# broke `2>&1` parsing (2026-11-24). Drop that block only; every other stderr line and the exit
+# code pass through unchanged.
+_drop_gh_hints() {
+  awk '/^hint: if you need to wait for this pull request/ { skip = 1; next }
+       skip && (/^    gh event listen/ || /^  - /) { next }
+       { skip = 0; print }'
+}
+gh() { command gh "$@" 2> >(_drop_gh_hints >&2); }
+
 # Node 24 from nvm (the non-interactive shell often defaults to Node 20, and npm ci then fails EBADENGINE)
 use_node24() {
   local bin; bin=$(ls -d "$HOME"/.nvm/versions/node/v24.*/bin 2>/dev/null | sort -V | tail -1 || true)
