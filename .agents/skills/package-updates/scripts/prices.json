@@ -1,0 +1,7 @@
+{
+  "_source": "USD per million tokens, Anthropic API list prices (claude-api skill model table, cached 2026-11-03). Cache writes assumed at 1.25x (5 min) and 2x (1 h) input. Haiku 5.5 doubles above 100K-token prompts; not modelled. Add a model here when the report lists it as unpriced.",
+  "claude-opus-5-5": { "input": 4, "cache_write_5m": 5, "cache_write_1h": 8, "cache_read": 0.2, "output": 20 },
+  "claude-sonnet-5-5": { "input": 2, "cache_write_5m": 2.5, "cache_write_1h": 4, "cache_read": 0.1, "output": 10 },
+  "claude-haiku-5-5": { "input": 0.1, "cache_write_5m": 0.125, "cache_write_1h": 0.2, "cache_read": 0.01, "output": 0.5 },
+  "gpt-6.1-sol": { "_source": "OpenAI API Standard tier, given by the user 2026-11-22", "input": 2, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0.1, "output": 10 }
+}
