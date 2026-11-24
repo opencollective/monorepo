@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Open a project in an isolated Docker container with a copy of the app (host files are not modified).
-# Third-party services (Postgres, OpenSearch, etc.) are not started.
+# Third-party services (Postgres, Redis, etc.) are not started.
 #
 #  Main use case: running scripts or commands in a safe/isolated/historyless/self-destroying environment.
 #
