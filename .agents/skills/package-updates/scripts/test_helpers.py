@@ -38,7 +38,7 @@ class Helpers(unittest.TestCase):
         self.log = self.root / 'calls.jsonl'
         self.env = dict(os.environ, PATH=str(self.bin) + ':' + os.environ['PATH'],
                         FIXTURE=str(self.fixture), CALLS=str(self.log),
-                        COUNTERS=str(self.root / 'counters.json'), TIMEOUT_MIN='0', INTERVAL='0',
+                        COUNTERS=str(self.root / 'counters.json'), TIMEOUT_MIN='0', INTERVAL='0', SLOW_INTERVAL='0',
                         GHR_SLEEP='0', STATUS_RETRY_SLEEP='0')
         gh = self.bin / 'gh'
         gh.write_text('''#!/usr/bin/env python3
@@ -60,7 +60,10 @@ if args[:2] == ['pr', 'view']:
     if value == 'network-error':
         print('read: operation timed out', file=sys.stderr); sys.exit(1)
 elif args[:2] == ['api', 'graphql']: value = f['graphql']
-elif args[:2] == ['pr', 'list']: value = [f['pr']]
+elif args[:2] == ['pr', 'list']:
+    if f.get('list_fails') and 'statusCheckRollup' in ' '.join(args):
+        print('HTTP 504: 504 Gateway Timeout', file=sys.stderr); sys.exit(1)
+    value = [f['pr']]
 elif args[:2] == ['run', 'list']: value = f.get('runs', [])
 elif args[:2] == ['run', 'view'] and '--log' in args:
     print(f.get('log', ''), end=''); sys.exit()
@@ -78,6 +81,15 @@ elif args[:2] == ['issue', 'list']:
 elif args[0] == 'api' and any('dependabot/alerts' in a for a in args): value = f.get('alerts', [])
 elif args[0] == 'api' and any('contents/package-lock.json' in a for a in args):
     print(json.dumps(f.get('lock', {}))); sys.exit()
+elif args[0] == 'api' and '/contents/' in args[1]:
+    path = args[1].split('/contents/', 1)[1].split('?', 1)[0]
+    if path not in f.get('files', {}):
+        print('gh: Not Found (HTTP 404)', file=sys.stderr); sys.exit(1)
+    print(f['files'][path], end=''); sys.exit()
+elif args[0] == 'api' and args[1].endswith('/protection/required_status_checks'):
+    if 'protection' not in f:
+        print('gh: Branch not protected (HTTP 404)', file=sys.stderr); sys.exit(1)
+    value = f['protection']
 elif args[0] == 'api' and args[1].count('/') == 2 and args[1].startswith('repos/'): value = {'default_branch': 'main'}
 elif args[0] == 'api' and '/compare/' in args[1]: value = {'behind_by': 2}
 else: sys.exit(0)
@@ -243,7 +255,8 @@ sys.exit(r.returncode)
         heads.write_text('1 head-one\n')
         env = dict(self.env, EXPECT_HEAD_CHANGE='1', HEADS_FILE=str(heads))
         result = self.call('wait-checks.sh', {'pr': pr()}, '1', env=env)
-        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn('TIMEOUT', result.stdout)
         self.assertNotIn('GREEN', result.stdout)
 
     def test_wait_treats_network_errors_as_pending(self):
@@ -259,6 +272,34 @@ sys.exit(r.returncode)
         result = self.call('wait-checks.sh', fixture, '1', '2', env=dict(self.env, TIMEOUT_MIN='1'))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn('#1: RED (head-two)', result.stdout)
+
+    def test_wait_reports_orphaned_check_run_as_stuck(self):
+        orphan = pr(statusCheckRollup=[dict(name='GraphQL Inspector', status='IN_PROGRESS', conclusion='')])
+        env = dict(self.env, STUCK_MIN='0', TIMEOUT_MIN='1')
+        result = self.call('wait-checks.sh', {'pr': orphan}, '1', env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('#1: STUCK (head-one)', result.stdout)
+        running = {'pr': orphan, 'runs': [dict(status='in_progress')]}
+        result = self.call('wait-checks.sh', running, '1', env=dict(env, TIMEOUT_MIN='0'))
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('#1: PENDING', result.stdout)
+
+    def test_wait_polls_slower_once_only_tests_are_pending(self):
+        def pending(name):
+            return pr(statusCheckRollup=[dict(name=name, status='IN_PROGRESS', conclusion='')])
+        env = dict(self.env, TIMEOUT_MIN='1', INTERVAL='0', SLOW_INTERVAL='1')
+        result = self.call('wait-checks.sh', {'prs': {'1': [pending('lint'), pr()]}}, '1', env=env)
+        self.assertIn('next poll in 0s', result.stdout)
+        env = dict(self.env, TIMEOUT_MIN='1', INTERVAL='1', SLOW_INTERVAL='0')
+        result = self.call('wait-checks.sh', {'prs': {'2': [pending('e2e (0*.(js|ts))'), pr()]}}, '2', env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('next poll in 0s', result.stdout)
+
+    def test_inventory_falls_back_to_one_call_per_pr_on_timeout(self):
+        result = self.call('list-prs.sh', {'pr': pr(), 'list_fails': True}, '--json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('falling back', result.stderr)
+        self.assertEqual(json.loads(result.stdout)[0]['number'], 1)
 
     def test_rebase_rejects_foreign_coauthor(self):
         value = pr(commits=[{'authors': [{'login': 'renovate[bot]'}, {'login': 'human'}]}])
@@ -430,6 +471,124 @@ if sys.argv[1] == 'install':
         result = self.call('rerun.sh', fixture, '1')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def cycle_env(self, **extra):
+        return dict(self.env, S=str(self.root / 's'), START_WAIT='0', **extra)
+
+    def test_cycle_wait_reports_green_and_releases_its_claim(self):
+        result = self.call('cycle.sh', {'pr': pr()}, 'wait', '1@head', env=self.cycle_env())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('#1: GREEN (head-one)', result.stdout)
+        self.assertFalse((self.root / 's' / 'claims' / 'api-1').exists())
+
+    def test_cycle_skips_a_moved_head_without_acting(self):
+        result = self.call('cycle.sh', {'pr': pr()}, 'rebase', '1@other', env=self.cycle_env())
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('#1: SKIPPED head moved from other to head-one', result.stdout)
+        self.assertFalse(any(c[:2] == ['pr', 'edit'] for c in self.calls()))
+
+    def test_cycle_skips_a_claimed_pr(self):
+        claims = self.root / 's' / 'claims'
+        claims.mkdir(parents=True)
+        (claims / 'api-1').write_text('fixer')
+        result = self.call('cycle.sh', {'pr': pr()}, 'rebase', '1', env=self.cycle_env())
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('#1: SKIPPED claimed by fixer', result.stdout)
+        self.assertFalse(self.log.exists() and any(c[:2] == ['pr', 'edit'] for c in self.calls()))
+        self.assertEqual((claims / 'api-1').read_text(), 'fixer')
+
+    def test_cycle_rebase_drops_refused_prs_and_releases_them(self):
+        value = pr(commits=[{'authors': [{'login': 'human'}]}])
+        result = self.call('cycle.sh', {'pr': value}, 'rebase', '1', env=self.cycle_env())
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('#1: SKIPPED foreign or unknown commit authors', result.stdout)
+        self.assertFalse((self.root / 's' / 'claims' / 'api-1').exists())
+
+    def test_cycle_rerun_summarizes_red_prs_and_keeps_full_failures(self):
+        fixture = {'pr': pr('FAILURE'), 'runs': [dict(databaseId=7, workflowName='E2E', conclusion='failure', status='completed')],
+                   'jobs': [dict(databaseId=70, name='e2e (2)', conclusion='failure')], 'log': 'e2e\tRun\t2026-11-22T10:00:00Z Error: boom\n'}
+        result = self.call('cycle.sh', fixture, 'rerun', '1', env=self.cycle_env())
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('reran failed jobs of run 7', result.stdout)
+        self.assertIn('#1: RED (head-one)', result.stdout)
+        self.assertIn('-- job 70: e2e (2)', result.stdout)
+        full = result.stdout.split('full: ')[1].split()[0]
+        self.assertIn('Error: boom', Path(full).read_text())
+
+    def test_rebase_updates_dependabot_branch_pinned_to_head(self):
+        value = pr(author={'login': 'app/dependabot'}, commits=[{'authors': [{'login': 'dependabot[bot]'}]}])
+        result = self.call('rebase.sh', {'pr': value}, '1')
+        self.assertIn('#1: rebase requested (update-branch)', result.stdout, result.stderr)
+        update = next(c for c in self.calls() if c[0] == 'api' and any('update-branch' in a for a in c))
+        self.assertIn('expected_head_sha=head-one', update)
+        self.assertFalse(any(c[:2] == ['pr', 'edit'] for c in self.calls()))
+
+    def test_cycle_rerun_full_reruns_the_whole_workflow(self):
+        fixture = {'pr': pr(), 'runs': [dict(databaseId=7, workflowName='E2E', conclusion='failure', status='completed')]}
+        result = self.call('cycle.sh', fixture, 'rerun-full', '1', env=self.cycle_env())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('reran all jobs of run 7', result.stdout)
+        rerun = next(c for c in self.calls() if c[:2] == ['run', 'rerun'])
+        self.assertNotIn('--failed', rerun)
+        result = self.call('cycle.sh', fixture, 'rerun', '1', env=self.cycle_env())
+        self.assertIn('--failed', [c for c in self.calls() if c[:2] == ['run', 'rerun']][-1])
+
+    REPO_FILES = {
+        '.nvmrc': '24\n',
+        'package.json': json.dumps({'engines': {'node': '24.x', 'npm': '11.x'}}),
+        'renovate.json': json.dumps({'extends': ['local>opencollective/renovate-config'], 'packageRules': [
+            {'description': 'No npm majors beyond what Node bundles', 'matchPackageNames': ['npm']},
+            {'matchPackageNames': ['@peculiar/asn1-schema'], 'groupName': 'peculiar asn1'}]}),
+        '.github/workflows/ci.yml': 'name: CI\non: push\njobs:\n  lint:\n    runs-on: x\n    steps: []\n'
+                                    '  test:\n    needs: lint\n    steps:\n      - run: npm test\n',
+    }
+
+    def test_repo_facts_prints_live_facts(self):
+        fixture = {'files': self.REPO_FILES,
+                   'protection': {'contexts': ['lint', 'test'], 'checks': [{'context': 'build'}]}}
+        result = self.call('repo-facts.sh', fixture)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn('default branch main', out)
+        self.assertIn('node (.nvmrc):    24', out)
+        self.assertIn('{"node":"24.x","npm":"11.x"}', out)
+        self.assertIn('  - No npm majors beyond what Node bundles', out)
+        self.assertIn('peculiar asn1', out)
+        self.assertIn('required checks:  build, lint, test', out)
+        self.assertIn('ci.yml jobs:      lint, test', out)
+
+    def test_repo_facts_without_protection_access_or_files(self):
+        files = {'package.json': json.dumps({'name': 'x'})}
+        result = self.call('repo-facts.sh', {'files': files})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn('required checks:  unknown (no access)', out)
+        self.assertIn('node (.nvmrc):    none', out)
+        self.assertIn('engines:          none', out)
+        self.assertIn('renovate rules:   no renovate.json', out)
+        self.assertIn('ci.yml jobs:      no .github/workflows/ci.yml', out)
+        renovate = {'renovate.json': json.dumps({'extends': []}), **files}
+        self.assertIn('renovate rules:   none', self.call('repo-facts.sh', {'files': renovate}).stdout)
+
+    def test_failures_prints_signature_notes(self):
+        output = self.failure_output(['  1 failing', '  1) merge-accounts', '     Error: boom',
+                                      '##[error]Process completed with exit code 1.'])
+        self.assertIn('unit flake: merge-accounts', output)
+        self.assertIn('note: server/lib/merge-accounts', output)
+
+    def test_with_lock_serializes_and_try_mode_fails_fast(self):
+        env = dict(self.env, OC_LOCK_DIR=str(self.root / 'locks'))
+        lock = SCRIPTS / 'with-lock.sh'
+        result = run(['bash', str(lock), 'api-test', 'echo', 'ran'], env=env)
+        self.assertEqual((result.returncode, result.stdout), (0, 'ran\n'), result.stderr)
+        holder = subprocess.Popen(['bash', str(lock), 'api-test', 'sleep', '5'], env=env)
+        self.addCleanup(holder.kill)
+        for _ in range(50):
+            if (self.root / 'locks' / 'api-test.lock' / 'pid').exists(): break
+            subprocess.run(['sleep', '0.1'])
+        result = run(['bash', str(lock), 'api-test', 'echo', 'ran'], env=dict(env, LOCK_TRY='1'))
+        self.assertEqual(result.returncode, 75, result.stdout + result.stderr)
+        self.assertNotIn('ran', result.stdout)
+
     def test_merge_respects_a_change_request_without_required_review(self):
         value = pr(reviewDecision='', latestReviews=[{'state': 'APPROVED', 'author': {'login': 'maintainer'}},
                                                      {'state': 'CHANGES_REQUESTED', 'author': {'login': 'other'}}])
@@ -581,6 +740,13 @@ if sys.argv[1] == 'install':
         self.assertIn('e2e flake: 27-expenses', output)
         self.assertNotIn('unit flake: Postgres', output)
         self.assertNotIn('incidental whole-log hints', output)
+
+    def test_graphql_inspector_check_run_404_is_named(self):
+        output = self.failure_output([
+            '##[error]Not Found - https://docs.github.com/rest/checks/runs#update-a-check-run',
+            '##[error]Invalid config. Failed to add annotation',
+        ])
+        self.assertIn('infra: GraphQL Inspector could not update its check run', output)
 
     def test_unsupported_failure_format_only_provides_incidental_hints(self):
         output = self.failure_output(['Error: socket hang up'])

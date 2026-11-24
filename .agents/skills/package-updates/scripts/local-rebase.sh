@@ -14,7 +14,7 @@ source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; pr="${2:?pr number}"; s
 push=""; squash=""
 for opt in "$@"; do case "$opt" in --push) push=--push ;; --squash) squash=1 ;; *) echo "unknown option $opt" >&2; exit 2 ;; esac; done
 [[ -n "$LOCAL_REPO" ]] || { echo "no local checkout for $REPO" >&2; exit 2; }
-use_node24 >/dev/null
+use_repo_node >/dev/null
 branch=$(pr_branch "$pr")
 S="${SCRATCH:-${TMPDIR:-/tmp}}/package-updates"; mkdir -p "$S"; WT="$S/wt-$SHORT-$pr"
 cd "$LOCAL_REPO"

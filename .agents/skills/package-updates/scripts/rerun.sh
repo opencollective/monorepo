@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Rerun only the failed jobs of every failed workflow run on a PR's head commit.
-# usage: rerun.sh <api|frontend|rest|images|pdf|contributors-svg> <pr-number> [<pr-number> ...]
+# INTERNAL: called by cycle.sh (rerun, rerun-full); use cycle.sh, which also waits for the new attempt.
+# Rerun the failed jobs (or, with --full, the whole workflow) of every failed workflow run on a PR's head commit.
+# usage: rerun.sh <api|frontend|rest|images|pdf|contributors-svg> [--full] <pr-number> [<pr-number> ...]
 source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift
+full=""; [[ "${1:-}" == "--full" ]] && { full=1; shift; }
 result=0
 for pr in "$@"; do
   sha=$(pr_head_sha "$pr")
@@ -12,7 +14,10 @@ for pr in "$@"; do
   for run in $runs; do
     st=$(gh run view "$run" -R "$REPO" --json status --jq .status 2>/dev/null)
     if [[ "$st" != "completed" ]]; then echo "#$pr: run $run is $st, wait for it to complete before rerunning"; result=1; continue; fi
-    if gh run rerun "$run" -R "$REPO" --failed; then echo "#$pr: reran failed jobs of run $run"
+    if [[ -n "$full" ]]; then
+      if gh run rerun "$run" -R "$REPO"; then echo "#$pr: reran all jobs of run $run"
+      else echo "#$pr: could not rerun $run: see error above"; result=1; fi
+    elif gh run rerun "$run" -R "$REPO" --failed; then echo "#$pr: reran failed jobs of run $run"
     else echo "#$pr: could not rerun $run: see error above"; result=1; fi
   done
 done
