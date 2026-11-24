@@ -47,9 +47,12 @@ while IFS=$'\t' read -r run wf concl; do
         evidence="$log"
       fi
       hit=0
-      while IFS=$'\t' read -r pat label; do
+      # flake-signatures.tsv: pattern<TAB>label[<TAB>note]
+      while IFS=$'\t' read -r pat label note; do
         [[ -z "$pat" ]] && continue
-        if grep -q -E -- "$pat" <<<"$evidence"; then echo "   - $label"; hit=1; fi
+        if grep -q -E -- "$pat" <<<"$evidence"; then
+          echo "   - $label"; [[ -n "${note:-}" ]] && echo "     note: $note"; hit=1
+        fi
       done < <(grep -v '^#' "$SIG")
       if [[ $hit == 0 ]]; then echo "   - unclassified: read the log (gh run view -R $REPO --job $job --log)"; fi
     done

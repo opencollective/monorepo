@@ -42,11 +42,17 @@ _drop_gh_hints() {
 }
 gh() { command gh "$@" 2> >(_drop_gh_hints >&2); }
 
-# Node 24 from nvm (the non-interactive shell often defaults to Node 20, and npm ci then fails EBADENGINE)
-use_node24() {
-  local bin; bin=$(ls -d "$HOME"/.nvm/versions/node/v24.*/bin 2>/dev/null | sort -V | tail -1 || true)
+# A Node major from nvm (the non-interactive shell often defaults to Node 20, and npm ci then fails EBADENGINE)
+use_node() {
+  local bin; bin=$(ls -d "$HOME"/.nvm/versions/node/v"${1:-24}".*/bin 2>/dev/null | sort -V | tail -1 || true)
   [[ -n "$bin" ]] && export PATH="$bin:$PATH"
   node -v
+}
+use_node24() { use_node 24; }
+# The major in the repo's .nvmrc on origin/main (pdf moved to 26 in November 2026), else 24
+use_repo_node() {
+  local major; major=$(git -C "${LOCAL_REPO:-.}" show origin/main:.nvmrc 2>/dev/null | tr -dc '0-9' || true)
+  use_node "${major:-24}"
 }
 
 # gh with up to 3 attempts and a growing pause (api.github.com returns 502/504 in bursts: three tries 3 s apart

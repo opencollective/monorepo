@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Inventory of open dependency PRs (Renovate + Dependabot, plus the user's own "(deps)" PRs) with everything
+# Inventory of open dependency PRs (Renovate + Dependabot, plus the user's own "(deps)" PRs and PRs carrying the `package-updates` label, i.e. fix/prep PRs this skill opened) with everything
 # triage needs: check state, mergeability, review state, own PR, commits behind main, foreign (non-bot)
 # commits, age of the last check. REVIEW: APPR (approved) / REQ (review required, explicit approval is needed) /
 # OWN (the user's PR: can't self-approve, needs another reviewer).
@@ -9,12 +9,18 @@ source "$(dirname "$0")/_lib.sh"; resolve_repo "${1:-}"; shift || true
 json=""; fast=""
 for opt in "$@"; do case "$opt" in --json) json=1 ;; --fast) fast=1 ;; *) echo "unknown option $opt" >&2; exit 2 ;; esac; done
 me=$(gh api user --jq .login)
-raw=$(ghr pr list -R "$REPO" --state open --limit 100 \
-  --json number,title,headRefName,headRefOid,updatedAt,isDraft,mergeable,mergeStateStatus,statusCheckRollup,labels,author,reviewDecision)
+FIELDS=number,title,headRefName,headRefOid,updatedAt,isDraft,mergeable,mergeStateStatus,statusCheckRollup,labels,author,reviewDecision
+if ! raw=$(ghr pr list -R "$REPO" --state open --limit 100 --json "$FIELDS"); then
+  # the checks of 100 PRs in one GraphQL query time out (504) on api: list light, then one call per dependency PR
+  echo "pr list with checks failed; falling back to one call per dependency PR" >&2
+  light=$(ghr pr list -R "$REPO" --state open --limit 100 --json number,title,author,labels) || exit 1
+  raw=$(jq -r --arg bots "$BOT_AUTHORS" --arg me "$me" '.[] | select((.author.login | test($bots)) or (.author.login == $me and ((.title | test("\\(deps")) or any(.labels[]?; .name == "package-updates")))) | .number' <<<"$light" \
+    | while read -r n; do ghr pr view "$n" -R "$REPO" --json "$FIELDS" || exit 1; done | jq -s .) || exit 1
+fi
 if [[ "$(jq length <<<"$raw")" -ge 100 ]]; then
   echo "Inventory may be truncated at 100 open PRs; expand or paginate before claiming completeness." >&2
 fi
-raw=$(jq --arg bots "$BOT_AUTHORS" --arg me "$me" '[.[] | select((.author.login | test($bots)) or (.author.login == $me and (.title | test("\\(deps"))))
+raw=$(jq --arg bots "$BOT_AUTHORS" --arg me "$me" '[.[] | select((.author.login | test($bots)) or (.author.login == $me and ((.title | test("\\(deps")) or any(.labels[]?; .name == "package-updates"))))
       | . + {review: (if .author.login == $me then "OWN" elif .reviewDecision == "APPROVED" then "APPR" else "REQ" end)}]' <<<"$raw")
 # Commit authors for every open PR in one GraphQL call (small pages: 100 PRs x 30 commits x 3 authors)
 authors=$(ghr api graphql -f query='query($o:String!,$r:String!){repository(owner:$o,name:$r){pullRequests(states:OPEN,first:100){nodes{number
